@@ -6,6 +6,7 @@ Mi tutor para poder realizar este proyecto es [Fernando Berzal Galiano](https://
 Este proyecto se centra en el estudio de una subárea del aprendizaje profundo: el aprendizaje adversario. El objetivo principal es analizar las vulnerabilidades inherentes en modelos de redes neuronales y desarrollar algoritmos que mejoren la seguridad frente a ataques adversarios. Inicialmente, se introduce brevemente la teoría fundamental de las redes neuronales y se presentan las taxonomías clásicas de problemas en el contexto del aprendizaje adversario.
 
 La memoria se divide en tres secciones principales:
+
     
      - **Análisis Teóricos**: Se exploran las posibles vulnerabilidades en las redes neuronales desde una perspectiva teórica, utilizando desarrollos en probabilidad y geometría para fundamentar las hipótesis sobre las debilidades de estos modelos.
     
