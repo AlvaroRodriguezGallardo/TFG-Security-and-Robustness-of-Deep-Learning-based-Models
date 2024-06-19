@@ -39,3 +39,5 @@ https://bitbucket.org/jadslim/german-traffic-signs
 ![alt text](https://i.gyazo.com/e3a3af9f3c09683870a66f8bb8f2c6ce.png)
 ![alt text](https://i.gyazo.com/f07d0e46a2d8bf6165352c9a983189cd.jpg)
 &nbsp;
+
+README.md extraido del repositorio de [Aridane](https://github.com/AridaneAM/OpenCV-senales-de-trafico).
