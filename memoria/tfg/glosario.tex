@@ -1,0 +1,41 @@
+% !TeX root = ../tfg.tex
+% !TeX encoding = utf8
+
+\chapter{Glosario}
+%\addcontentsline{toc}{chapter}{Glosario} % Añade el glosario a la tabla de contenidos
+
+A continuación se exponen algunos conceptos no explicados en la memoria pero cuyo entendimiento es necesario para un correcto seguimiento de la misma.
+
+\begin{description} 
+  \item \textbf{Condiciones de Karush-Kuhn-Tucker}: Es una generalización del método de los multiplicadores de Lagrange. Supóngase que se tiene la función objetivo, $f: \mathbb{R}^n \to \mathbb{R}$, que se busca minimizar y sean las funciones de restricción $g_i : \mathbb{R}^n \to \mathbb{R}$, $h_j: \mathbb{R}^n \to \mathbb{R}$. Supóngase que sondiferenciables en un punto $x_0$. Si $x_0$ es un mínimo local, entonces existen constantes $\lambda \geq 0$, $\mu_i \geq 0$ y $\beta_j$, con $i=1,...,m$,$j=1,...l$ no todas nulas tales que 
+  $$\lambda + \sum_{i=1}^m \mu_i + \sum_{j=1}^l | \beta_j | >0$$
+  $$\lambda \nabla f(x_0) + \sum_{i=1}^m \mu_i \nabla g_i (x_0) + \sum_{j=1}^l \beta_j \nabla h_j (x_0) = 0$$
+  $$\mu_i g_i(x_0) = 0 \text{ para todo } i=1,...,m$$
+
+  \item \textbf{Conjunto linealmente separable}: Es aquel para el que existe un hiperplano que separa los datos pertenecientes a cada una de las clases de forma clara (esto es, ninguna muestra cae en el hiperplano).
+
+  \item \textbf{Envoltura convexa}: Si $X$ es un conjunto de puntos de dimensión $n$, su envoltura convexa es la intersección de todos los conjuntos convexos que contienen a $X$. Formalmente, dados $k$ puntos $x_1$,...,$x_k$, su envolvente convexa $C$ viene dada como
+
+  $$C(X) = \left\{ \sum_{i=1}^k \alpha_i x_i : x_i \in X, \alpha_i \geq 0, \sum_{i=1}^k \alpha_i = 1 \right\}$$
+
+  \item \textbf{Red neuronal prealimentada (\textit{Feedforward Net}}: Red neuronal artificial donde las conexiones entre las neuronas no forman un ciclo.
+
+  \item \textbf{Función de activación \textit{MaxOut}}: Función que devuelve el máximo de las mútltiples salidas para cada entrada. Si $x$ es una entrada, y tiene dos posibles salidas, devuelve $\max (\omega_1^t x + b_1, \omega_2^t x + b_2)$.
+
+  \item \textbf{Función de preactivación}: Operación lineal que se suele realizar antes de aplicar la función de activación. Es una combinación lineal de las entradas de la neurona ponderadas por los respectivos pesos, añadiendo un sesgo.
+
+  \item \textbf{Grafo acíclico dirigido}: Grafo dirigido que no contiene ciclos.
+
+  \item \textbf{\textit{Label Propagation}}: Algoritmo de aprendizaje semi-supervisado que asigna las etiquetas de datos asociados a una clase con  datos que no han sido etiquetados.
+
+  \item \textbf{\textit{Label Spreading}}: Algoritmo de aprendizaje semi-supervisado que se basa en la idea de que los puntos de datos similares o cercanos en el espacio de características deben tener etiquetas similares. La diferencia con \textit{Label Propagation} es que este se basa en un vecindario e introduce un término de regularización que suaviza las etiquetas entre iteraciones.
+
+  \item \textbf{Logit}: Función usada en regresión logística para asociar las probabilidades de ocurrencia de un evento binario como éxito/fallo a una escala continua en $\mathbb{R}$.
+
+  \item \textbf{Modelo LLM}: Denominado como modelo de lenguaje grande (\textit{Large Language Model}), es un tipo de modelo en inteligencia artificial diseñado para comprender y generar texto de manera similar a cómo lo haría un humano. ChatGPT pertenece a esta clase de modelos.
+
+  \item \textbf{Neurona}: Unidad básica de procesamiento que imita la función de las neuronas en el cerebro humano. Cada neurona recibe una serie de entradas, las procesa en función de cuál sea su funcionamiento y produce una salida.
+
+  \item \textbf{Número de condición de una matriz}: Indica cuánto varían las soluciones del sistema si se realiza un pequeño cambio en el vector por el que se multiplica. Si $A$ es la matriz, se define como $\kappa(A) = \|A\| \cdot \|A^{-1}\|$. $A$ está mal condicionada si el valor es significativamente mayor a $1$, y está bien condicionada si está cerca de $1$.
+\end{description}
+\endinput

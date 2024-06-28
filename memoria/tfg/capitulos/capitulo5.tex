@@ -1,0 +1,32 @@
+% !TeX root = ../tfg.tex
+% !TeX encoding = utf8
+
+\chapter{Conclusiones y futuro trabajo}
+\label{cap:capitulo5}
+
+A lo largo de esta memoria se ha desarrollado el tema de la seguridad y robustez de los modelos de aprendizaje profundo desde dos puntos de vista.
+
+Desde un punto de vista matemático, se ha observado que para las redes neuronales profundas existen ciertos ataques que pueden comprometer su funcionamiento. Es natural preguntarse por qué existen tales ataques, lo que lleva a un análisis tanto teórico como comprensivo del funcionamiento de una red neuronal profunda. Este análisis incluye los componentes usados para entrenarla, como la función coste, o incluso los datos que se utilizan en el entrenamiento. Desde la distribución de los datos en el entrenamiento hasta los inconvenientes de usar ciertas funciones de coste, se han considerado visiones pesimistas que indican que todo ejemplo tendrá un adversario. Es más fácil visualizar esto con una imagen a la que se le puede añadir ruido gaussiano hasta que falle en la clasificación. Aunque teóricamente todo ejemplo tenga un adversario, sería conveniente que el ruido añadido sea imperceptible para el ojo humano o para algoritmos de detección.
+
+A lo largo del capítulo segundo, se han presentado varias propuestas para mitigar el impacto de los ataques, tales como el entrenamiento diferencial para eliminar el uso de la función de coste cross-entropy, sin entrar en gran detalle para no desviar el tema principal del trabajo.
+
+Además de los resultados expuestos, que utilizan herramientas del análisis matemático, geometría, estadística y probabilidad para el estudio de las redes neuronales, se han llevado a cabo estudios desde perspectivas distintas. Algunos ejemplos incluyen el trabajo de Ciprian et al.~\cite{TopoAlg}, que usa resultados de topología algebraica para revisar la forma en que entrenan las redes neuronales y propone métodos para detectar ejemplos adversarios. Chenxiao et al.~\cite{HiddenNeur} ofrece algoritmos para la detección de ejemplos adversarios basados en la métrica de información de Fisher, apoyado en el uso de tensores, desde la geometría de la información. Por último, Xin et al.~\cite{TeoJuegos}, desde la perspectiva de la teoría de juegos, proporciona una aproximación a la interpretabilidad y transferibilidad de los ejemplos adversarios, proponiendo un método de ataque a la red neuronal mediante la propiedad de transferibilidad.
+
+
+Por otro lado, desde el punto de vista de la ingeniería informática se han presentado algunos de los algoritmos de ataque a redes neuronales profundas siguiendo la taxonomía de ataques causativos y ataques reactivos. Se exploraron desde ataques simples como FGSM hasta otros más complejos, además de hacer una diferenciación entre ataques a redes neuronales predictivas y redes neuronales generativas. 
+
+Tras el estudio de la literatura actual, se procedió a implementar algunos de los algoritmos propuestos para una red neuronal que detecta señales de tráfico alemanas con el objetivo de simular ataques en el mundo real que, si no son detectados y tratados correctamente, pueden desembocar en accidentes y pérdida de vidas humanas.
+
+Como trabajo a futuro, se pueden considerar las siguientes líneas de investigación y desarrollo para la mejora de la seguridad y robustez de los modelos de aprendizaje profundo:
+
+\begin{itemize}
+    \item Investigar y desarrollar nuevos métodos de defensa que sean robustos y adaptativos frente a una variedad amplia de ataques adversario, incluyendo no solo aquellos que añadan ruido, sino también aquellos que realicen manipulaciones más sofisticadas de los datos de entrada, mezclando trabajadores de diversas áreas como las matemáticas o la informática.
+
+    \item Crear métricas y protocolos estandarizados para evaluar la robustez de los modelos de aprendizaje profundo bajo diferentes escenarios de ataque, garantizando que los métodos de defensa sean efectivos en entornos del mundo real como la conducción autónoma o sistemas de salud.
+
+    \item Desarrollar modelos de redes neuronales que puedan generar y defenderse contra ejemplos adversario creados por ellas mismas durante el proceso de entrenamiento, mejorando así su capacidad de resistencia ante ataques desconocidos.
+
+    \item Explorar técnicas que no solo aseguren la robustez del modelo, sino que también garanticen la privacidad y seguridad de los datos utilizados en el entrenamiento, evitando posibles filtraciones.
+
+    \item Desarrollar técnicas de interpretabilidad de las decisiones de las redes neuronales de tal manera que se facilite la identificación de vulnerabilidades y se mejore la capacidad humana en lo que respecta al conocimiento sobre estos modelos.
+\end{itemize}

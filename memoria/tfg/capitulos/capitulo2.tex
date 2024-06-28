@@ -1,0 +1,1566 @@
+% !TeX root = ../tfg.tex
+% !TeX encoding = utf8
+
+\chapter{Análisis de vulnerabilidades de redes neuronales profundas}
+\label{cap:capitulo2}
+
+Los ataques causativos son aquellos que aprovechan ciertas propiedades vulnerables de los datos para que el modelo entrenado tenga el comportamiento buscado por el atacante. Un ejemplo de caso en el que se muestra que los datos y lo que representan son una parte crucial en el aprendizaje automático es el siguiente: el ejercito de cierto país desarrolla un algoritmo de aprendizaje profundo para la detección en tiempo real de tanques y, tras gastar grandes cantidades de dinero, obtienen un modelo que proceden a testear. Los resultados arrojan que el modelo es incapaz de reconocer tanques en diversos escenarios, o incluso reconoce tanques cuando no aparecen en la imagen. Finalmente, se descubrió que el modelo fue entrenado con imágenes de tanques en cierto momento del día, y el modelo aprendió a reconocer tanques únicamente por el color del cielo.
+
+Aunque el caso anterior está relacionado con la calidad de los datos, se podría extrapolar a ataques causativos. Un posible atacante podría ser un hipotético país rival, que tiene la intención de atacar al país que desarrolló el modelo. Si ataca a los datos de entrenamiento para que el modelo no aprenda buenas características, podría atacar en un momento en que sabe que el modelo fallará en la detección de sus tanques.
+
+Esta situación ocurrió en los años 80 cuando el ejercito estadounidense intentó crear un modelo que reconociese tanques.%, y los clasificase como aliados o enemigos.
+
+Se puede observar que actualmente ningún modelo de redes neuronales profundas está exento de este tipo de ataques, al menos tal y como se entrenan actualmente. Es natural preguntarse por el origen de estos ataques: qué está fallando en la parte de los datos. Por ello, varios investigadores de distintos campos empezaron a buscar justificaciones de la existencia de los mismos, intentando demostrar las vulnerabilidades existentes en estos modelos, tanto desde el punto de vista de los datos (ataques causativos) como desde el punto de vista del entrenamiento del modelo (ataques exploratorios), presentando bastantes argumentos a favor de algunas debilidades, expandiendo el objeto de estudio a campos como la topología algebraica o la geometría de la información.
+
+A continuación, se exponen algunos de los resultados más importantes obtenidos hasta la fecha, acompañados de justificaciones teóricas sobre las que se apoyan. Se remarca que estos resultados distinguen entre la vulnerabilidad de los datos, haciendo hincapié en las distribuciones que puedan seguir, y la vulnerabilidad del modelo, ya sea por existencia de ciertas capas o por otros motivos, tales como la función de activación de neuronas.
+
+% VULNERABILIDADES DE LOS DATOS
+
+\section{Dimensionalidad de los datos}
+\subsection{Límites del riesgo adversario}
+En este apartado se presentarán los resultados justificados en  Diochnos et al.~\cite{LimitsAdvers}, con los que se muestra que no se pueden superar ciertos niveles de seguridad en un modelo teniendo como hipótesis que los datos se distribuyen en el espacio de características binarias de gran dimensionalidad (\(\{0,1\}^n\)) de manera uniforme, usando los autores una serie de resultados de apoyo.
+
+
+
+\begin{definicion}{}[Tamaño local de la bola de Hamming]
+Para $n \in \mathbb{N}$, se define localmente el tamaño de la bola de Hamming como la función $\text{BSize}_n: \{1,\ldots,n\} \times [0,1) \to [0,1)$ definida de la siguiente forma: 
+
+$$\text{BSize}_n(k,\lambda)=2^{-n}\cdot \left( \sum_{i=0}^{k-1} \binom{n}{i} + \lambda\cdot\binom{n}{k} \right)$$
+
+\end{definicion}
+
+\begin{lema} \label{lem21}
+Para $\mu \in [0,1]$ se cumple
+
+\[
+\mu \geq \text{BSize}_n\left(\frac{n-\sqrt{-2\cdot\ln(\mu)\cdot n}}{2}+1,0\right)
+\]
+
+Además, si $\text{BSize}_n^{-1}(\mu)$ es la inversa (por ser $\text{BSize}_n$ biyectiva $\forall n \in \mathbb{N}$), entonces 
+$$k \geq \frac{n-\sqrt{-2\cdot ln(\mu)\cdot n}}{2}+1$$
+\end{lema}
+
+Para la prueba, se usará el siguiente resultado.
+
+\begin{lema}[Caso general de la desigualdad de Hoeffding] \label{Hoefding}
+Sean $X_1,...,X_n$ variables aleatorias independientes. Supóngase que $X_i$ está acotada de tal manera que 
+
+$$\mathbb{P}[X_i \in [a_i,b_i]] = 1$$
+
+La media muestral se define como $\bar{X} = \frac{1}{n} \sum_{i=1}^n X_i$
+
+Entonces
+
+\begin{equation}
+\mathbb{P}[\bar{X} - \mathbb{E}[\bar{X}] \geq t] \leq \exp \left( - \frac{2t^2n^2}{\sum_{i=1}^n (b_i-a_i)^2} \right)
+\end{equation}
+
+\begin{equation}
+\mathbb{P}[|\bar{X}-\mathbb{E}[\bar{X}]| \geq t] \leq 2 \cdot \exp \left( - \frac{2t^2n^2}{\sum_{i=1}^n (b_i - a_i)^2} \right)
+\end{equation}
+
+para todo $t > 0$.
+
+\end{lema}
+
+\begin{proof}(Lema \ref{lem21})
+Sea $k' = \frac{n-\sqrt{-2 \cdot ln(\mu)\cdot n}}{2}+1$ y sean $n$ variables aleatorias uniformes, $X_1,\ldots,X_n$ sobre el conjunto $\{0,1\}$. Se tiene $\text{BSize}_n(k',0)=\mathbb{P}[X_1+\ldots+X_n \leq K'-1]$.
+
+Por la desigualdad de Hoefding en \ref{Hoefding}, se cumple
+
+$$\mathbb{P}[X_1+\ldots+X_n\leq k-1] \leq e^{\frac{-n\cdot(1-\frac{2k-2}{n})^2}{2}}=\mu$$
+
+En consecuencia, $\mu \geq \text{BSize}_n(k',0)$, por lo que se prueba la primera desigualdad. La segunda es inmediata, pues $\mu=\text{BSize}_n(k,\lambda)\geq\text{BSize}(k',0)$, lo que implica $k\geq k'$
+\end{proof}
+
+El siguiente lema se sigue del teorema central del límite.
+
+\begin{lema} \label{lemTCL}
+ Dados $\lambda \in [0,1)$ y $a \in \mathbb{R}$, si $\phi$ es la función de distribución de una normal estándar,
+ 
+ $$\lim_{n \to \infty} \left|\text{BSize}_n\left(\frac{n}{2}+a\cdot\sqrt{n},\lambda\right)\right| = \phi(2a)
+$$
+\end{lema}
+
+\begin{lema} \label{lem24}
+Si $1\leq k \leq \text{E}(\frac{n}{2})$ entonces $\text{BSize}_n(k,0) < \binom{n}{k}\cdot \frac{2^{2m-1-n}}{\binom{2m}{m}}$ con $m=\text{E}(\frac{n}{2})$ (a partir de ahora, $\text{E}(x)$ será la parte entera de $x$).
+\end{lema}
+
+\begin{corolario} \label{coro21}
+Si $1 \leq k \leq \text{E}\left(\frac{n}{2}\right)$ entonces $\text{BSize}_n(k, 0) < \binom{n}{k} \sqrt{\frac{n}{2^{2n+1}}}$.
+
+\end{corolario}
+
+\begin{proof}
+Por el lema \ref{lem24}, y que se cumple $\binom{2m}{m} \geq \frac{2^{2m-1}}{\sqrt{m}}$ (véase el lema A.2 en Diochnos et al.~\cite{LimitsAdvers}), se obtiene la desigualdad
+\end{proof}
+
+\begin{corolario} \label{coro22}
+Para cualquier $k \in \mathbb{N}$ se cumple $lim_{n \to \infty} \frac{\text{BSize}_n(k,0)}{\sqrt(n)\binom{n}{k}2^{-n}} \leq \sqrt{\frac{\pi}{8}}$
+\end{corolario}
+\begin{proof}
+Sea $m=\text{E}(n/2)$. Por el lema \ref{lem24}, 
+
+$$\frac{\text{BSize}_n(k,0)}{\sqrt{n}\binom{n}{k}2^{-n}} \leq \frac{2^{2m-1}}{\sqrt{2m}\binom{2m}{m}}$$
+
+lo que implica $lim_{n \to \infty} \frac{\text{BSize}_n(k,0)}{\sqrt{n}\binom{n}{k}} \leq lim_{m \to \infty} \frac{2^{2m-1}}{\sqrt{2m}\binom{2m}{m}}=\sqrt{\frac{\pi}{8}}$, siendo la última desigualdad la dada en lema A.3 en Diochnos et al.~\cite{LimitsAdvers}
+\end{proof}
+
+Primero se introducirán conceptos necesarios en los teoremas, que darán lugar a una serie de corolarios que prueban lo buscado en el caso de problemas de clasificación.
+
+\begin{definicion} \label{def22}
+Dada una hipótesis de cierto espacio de hipótesis, $h$, un elemento de cierto conjunto de distribuciones sobre $\mathcal{X}$, llamando a dicho conjunto $\mathcal{D}$, se define el error asociado a la hipótesis como 
+$$\text{Risk}(h,c,\mathcal{D})=\mathbb{P}[h(x)\neq c(x)]$$ para cierto $x$ escogido del conjunto de distribuciones y $c \in \mathcal{C}$ una clase (en un problema de clasificación).
+
+\end{definicion}
+\begin{definicion} \label{def23}
+Para $r>0$,  $h \in \mathcal{H}$ hipótesis de cierto espacio de hipótesis, $c \in \mathcal{C}$ una clase, se define el riesgo de la región de error bajo la r-perturbación, hecha una elección $x$ en el espacio de distribuciones, como
+$$\text{Risk}_r^{ER}(h,c)=\mathbb{P}[\exists x' \in B(x,r) : h(x') \neq c(x')]$$
+\end{definicion}
+\begin{definicion}
+Para $h \in \mathcal{H}$,$x \in \mathcal{X}$,$c \in \mathcal{C}$, la robustez de la región de error asociada es, para cierta elección $x$,
+
+$$\text{Rob}^{ER}(h,c)=\mathbb{E}[\inf\{r:\exists x' B(x,r), h(x')\neq c(x')\}]$$
+\end{definicion}
+
+En las dos definiciones anteriores $x'$ es el ejemplo adversario modificado para hacer fallar al modelo, esto es, ocurra $h(x')\neq c(x')$.
+
+\begin{teorema} \label{tem21}
+Sea \(\mathcal{P}=(\{0,1\}^n,\mathcal{Y},\mathcal{U}_n,\mathcal{C},\mathcal{H},HD)\) un problema de clasificación. Para \(h\), \(c\) y \(r \in \mathbb{N}\) sea \(\mu = \text{Risk}(h,c) > 0\) el riesgo original y \((k,\lambda)=\text{BSize}^{-1}(\mu)\) función del riesgo original. La región de error del riesgo adversario bajo una r-perturbación está acotada inferiormente como
+\[
+\text{Risk}_r^{ER}(h,c) \geq \text{BSize}(k+r,\lambda)
+\]
+\end{teorema}
+
+
+La demostración del teorema implica introducir más conceptos, y es algo tediosa, por lo que no se probará. Sin embargo, las consecuencias del mismo sí se demostrarán, probando una de las debilidades de las redes neuronales profundas  que hace posible la existencia de ataques causativos.
+
+\begin{corolario}
+Sea \(\mathcal{P}=(\{0,1\}^n,\mathcal{Y},\mathcal{U}_n,\mathcal{C},\mathcal{H},HD)\) un problema de clasificación. Para cualesquiera \(h,c\) con riesgo \(\mu \in (0,\frac{1}{2}]\) asociado en la predicción de \(c\), se aumenta el riesgo de \((h,c)\) de \(\mu \in (0,\frac{1}{2}]\) a \(\mu' \in [\frac{1}{2},1]\) cambiando \(r=\sqrt{\frac{-n \ln(\mu)}{2}}+\sqrt{\frac{-n \ln(1-\mu')}{2}}\) bits en las instancias de entrada. Se tiene además que \(\text{Risk}_r^{ER}(h,c)\geq \mu'\) y si se quiere un error de \(\frac{1}{2}\), basta cambiar, como mucho, \(r'=\sqrt{\frac{-n \ln(\mu)}{2}}\) bits.
+\end{corolario}
+\begin{proof}
+Sea \((k,\lambda)=\text{BSize}^{-1}(\mu)\). Por el teorema \ref{tem21}, se sabe que 
+\[
+\text{Risk}_r^{ER}(h,c) \geq \text{BSize}(k+r,\lambda)
+\]
+Gracias al lema \ref{lem21} se sabe \(k \geq \frac{n-\sqrt{-2 \ln(\mu)n}}{2}\). Por lo tanto
+\begin{align}
+\text{Risk}_r^{ER}(h,c) \geq \text{BSize}(k+r,\lambda) \\
+&\geq \text{BSize}\left(\frac{n+\sqrt{-2 \ln(1-\mu')n}}{2},\lambda\right) \\
+&\geq 1-\text{BSize}\left(\frac{n-\sqrt{-2 \ln(1-\mu')n}}{2}+1,0\right) \geq \mu'
+\end{align}
+
+Si el error fuese \(\frac{1}{2}\), basta sustituir para tener lo buscado.
+\end{proof}
+
+El corolario probado implica que para tareas de clasificación en \(U_n\), cambiando como mucho \(3.04\sqrt{n}\)  bits, se aumentaría el error de una hipótesis del \(1\%\) al \(99\%\).
+
+\begin{corolario} \label{coro24}
+Sea $\mathcal{P}=(\{0,1\}^n,\mathcal{Y},\mathcal{U}_n,\mathcal{C},\mathcal{H},HD)$ un problema de clasificación, $\mu \in (0,1]$ y $\mu' \in (\mu,1]$. Para cualesquiera $h \in \mathcal{H}$, $c \in \mathcal{C}$ tales que $\text{Risk}(h,c) \geq \mu$ se tiene $\text{Risk}_r(h,c) \geq \mu'$ para $r \approx \sqrt{n}\frac{\phi^{-1}(\mu')-\phi^{-1}(\mu)}{2}$ cuando $n \to \infty$
+
+donde $\phi$ es la función de distribución de una normal estándar.
+\end{corolario}
+
+\begin{proof}
+Por simplicidad supóngase $\mu$ es exactamente el riesgo. Sea $(k,\lambda) = \text{BSize}^{-1}(\text{Risk}(h,c))$. Por el lema \ref{lemTCL}, si $n \to \infty$, se tiene 
+$$\mu=|\text{BSize}(k,\lambda)| \approx \phi \left(\frac{2k-n}{\sqrt{n}}\right)$$
+
+Por lo tanto, $k \approx \frac{n}{2}+\phi^{-1}(\mu)\cdot \frac{\sqrt{n}}{2}$. Por el teorema \ref{tem21} y de nuevo el lema \ref{lemTCL},
+\begin{align*}
+\text{Risk}_r(h,c) &\geq |\text{BSize}(k+r,0)| \\
+&\approx \left| \text{BSize} \left( \frac{n}{2} + \frac{\phi^{-1}(\mu)}{2}\sqrt{n}-\frac{\phi^{-1}(\mu)}{2}\sqrt{n} + \frac{\phi^{-1}(\mu')}{2}\sqrt{n},0 \right) \right| \\
+&= \left| \text{BSize} \left( \frac{n}{2}+\frac{\phi^{-1}(\mu')}{2}\sqrt{n},0 \right) \right| \approx \phi(\phi^{-1}(\mu')) = \mu'
+\end{align*}
+\end{proof}
+
+El corolario \ref{coro24} demuestra que, para tareas de clasificación sobre $\mathcal{U}_n$, si $n$ es suficientemente grande, el error se incrementa del $1\%$ al $99\%$ con un cambio de, como máximo, $2.34\sqrt{n}$ bits.
+
+Para los resultados siguientes, es necesario el siguiente teorema, el cual muestra cómo acotar superiormente la robustez adversaria en función del riesgo original.
+
+
+\begin{teorema} \label{teom22}
+Sea $\mathcal{P}=(\{0,1\}^n,\mathcal{Y},\mathcal{U}_n,\mathcal{C},\mathcal{H},HD)$ un problema de clasificación. Dados $h \in \mathcal{H}$,$c \in \mathcal{C}$, si $\mu=\text{Risk}(h,c)$ y $(k,\lambda)=\text{BSize}^{-1}(\mu)$ depende del riesgo original, entonces la robustez de la región de error es acotada superiormente como
+
+$$\text{Rob}^{ER}(h,c) \leq \sum_{r=0}^{n-k+1}(1-\text{BSize}(k+r,\lambda))$$
+\end{teorema}
+
+Se termina el subapartado enunciando y probando dos consecuencias del teorema anterior.
+
+\begin{corolario} \label{coro25}
+Sea $\mathcal{P}=(\{0,1\}^n,\mathcal{Y},\mathcal{U}_n,\mathcal{C},\mathcal{H},HD)$ un problema de clasificación. Para cualquier hipótesis $h \in \mathcal{H}$ con riesgo asociado $\mu \in (0,\frac{1}{2}]$ se puede hacer que $h$ dé siempre respuestas erróneas cambiando, en media, $r=\sqrt{-n ln(\frac{\mu}{2})}+\mu\sqrt{\frac{n}{2}}$ bits. Es decir
+
+$$\text{Rob}^{ER}(h,c) \leq \sqrt{\frac{-n ln(\mu)}{2}}+\mu\sqrt{\frac{n}{2}}$$
+\end{corolario}
+
+\begin{proof}
+Sea $(k,\lambda)=\text{BSize}^{-1}(\mu)$. Por el teorema \ref{teom22}, 
+
+$$\text{Rob}^{ER}(h,c) \leq \sum_{r=0}^{n-k+1} (1-\text{BSize}(k+r,\lambda)) \leq \sum_{r=0}^{n-k+1} (1-\text{BSize}(k+r,0))$$
+
+Por el lema A.4 en Diochnos et al.~\cite{LimitsAdvers} se tiene $\sum_{i=1}^{n+1} \text{BSize}(i,0)=1+\frac{n}{2}$. Por lo tanto, 
+$$\text{Rob}^{ER}(h,c) \leq n-k+1 - \left( 1+\frac{n}{2} - \sum_{i=1}^{k-1} \text{BSize}(i,0) \right) = \frac{n}{2}-k+\sum_{i=0}^{k-1} \text{BSize}(i,0)$$
+
+Consecuentemente, usando el corolario \ref{coro21}
+
+\begin{align}
+\text{Rob}^{ER}(h,c) &\leq \frac{n}{2}-k+\sum_{i=1}^{k-1} \text{BSize}(i,0) \\
+&\leq \frac{n}{2}-k+\sum_{i=1}^{k-1}\binom{n}{i}2^{-n}\sqrt{\frac{n}{2}} \\
+&\leq \frac{n}{2}-k+\text{BSize}(k,0)\sqrt{\frac{n}{2}} \\
+&\leq \frac{n}{2}-k+\mu\sqrt{\frac{n}{2}}
+\end{align}
+
+Finalmente, por el lema \ref{lem21}, se sabe $k \geq \frac{n-\sqrt{-2 ln(\mu)n}}{2}+1$, de donde se concluye 
+$$\text{Rob}^{ER}(h,c)\leq \sqrt{\frac{-n ln(\mu)}{2}}+\mu \sqrt{\frac{n}{2}}$$
+\end{proof}
+
+\begin{corolario}
+Para cualesquier $\mu \in (0,1]$, problema de clasificación $\mathcal{P}=(\{0,1\}^n,\mathcal{Y},\mathcal{U}_n,\mathcal{C},\mathcal{H},HD)$, $h \in \mathcal{H}$, $c \in \mathcal{C}$ tales que $\text{Risk}(h,c)\geq \mu$, se tiene el siguiente comportamiento asintótico
+$$\text{Rob}^{ER}(h,c) \leq \frac{\phi^{1}(\mu)}{2}\sqrt{n}+\mu \sqrt{\frac{\pi \cdot n}{8}} \text{    cuando } n \to \infty$$
+
+donde $\phi$ es la función de distribución de una normal estándar.
+
+\end{corolario}
+\begin{proof}
+Como ocurrió en la prueba del corolario anterior, si $n$ es suficientemente grande, por el corolario \ref{coro22}
+\begin{align}
+\text{Rob}^{ER}(h,c) &\leq \frac{n}{2}-k+\sum_{i=1}^{k-1} \text{BSize}(i,0) \\
+&\leq \frac{n}{2}-k+\sum_{i=1}^{k-1}\binom{n}{i}2^{-n}\sqrt{\frac{\pi \cdot n}{8}} \\
+&\leq \frac{n}{2}-k+\text{BSize}(k,0)\sqrt{\frac{\pi \cdot n}{8}} \\
+&\leq \frac{n}{2}-k+\mu\sqrt{\frac{\pi \cdot n}{8}}
+\end{align}
+
+Usando el lema \ref{lemTCL} y $n$ suficientemente grande, se toma $k \approx \frac{n}{2}+\phi^{-1}(\mu)\cdot\frac{\sqrt{n}}{2}$ y consecuentemente
+\[
+\text{Rob}^{ER}(h,c)\leq \frac{\phi^{-1}(\mu)}{2}\sqrt{n} + \mu \sqrt{\frac{\pi \cdot n}{8}}
+\]
+\end{proof}
+
+Lo anterior da como consecuencia que cambiando $1.53\sqrt{n}$ bits en media se puede aumentar el error dado en una hipótesis del $1\%$ al $100\%$ y, si $n \to \infty$, cambiando en media solo $1.17\sqrt{n}$ bits el error también puede aumentar del $1\%$ al $100\%$.
+
+\subsection{Ejemplos adversario inevitables}
+
+Es natural pensar que si todas las redes neuronales profundas tienen asociadas ciertas pérdidas, se podrá forzar la creación de ejemplos adversario para los cuales la red falle en su trabajo. Es fundamental que el ejemplo adversario sea muy difícil de detectar al ojo humano, aunque esto no exime de que los ejemplos adversario puedan ser detectados. En Simon-Gabriel et al.~\cite{UnavodibleAdvers} se hace un breve análisis de la existencia segura de ejemplos creados para ataques causativos, usando redes neuronales convolucionales para clasificar imágenes.
+
+Llámese $f$ al clasificador entrenado para cierto problema de clasificación de imágenes, denotando $x$ a una imagen. Se mostrará la vulnerabilidad para redes convolucionales, pero es extrapolable a redes orientadas a clasificación.
+
+En primer lugar, el proceso de creación de una imagen adversaria, consiste en la adición de cierta perturbación a la imagen original, $x$. En otras palabras, escoger cierto $\delta$ tal que $ \| \delta \| \leq \epsilon$ para cierto $\epsilon$ suficientemente pequeño y una norma escogida para el espacio de datos de entrada. La imagen adversario no es más que $x+\delta$, y se dirá que el ataque tiene éxito si $f(x+\delta) \neq f(x)$.
+
+\begin{definicion}
+Considérese que el espacio de datos de entrada sigue una distribución $P$. Se define la vulnerabilidad adversaria de $f$ a un ataque como el antes definido (formalmente, un $\| \cdot \|$-ataque $\epsilon$-dimensionado) a la probabilidad de que exista $\delta$ que cumple lo antes especificado.
+\end{definicion}
+\begin{definicion}
+Si $\mathcal{L}$ es la función coste, se define el ($\mathcal{L}$-)daño adversario al aumento medio del coste tras un ataque, $\mathbb{E}_{x \sim P}[\Delta \mathcal{L}]$.
+\end{definicion}
+
+Se trabajará sobre la función coste de la red neuronal y su relación con la robustez del propio modelo. Para ello, siguiendo los resultados de Goodfellow et al.~\cite{GoodfLAdvers}, Lyu et al.~\cite{LyuLAdvers} y Sinha et al.~\cite{SinhaLAdvers}, se dirá que un clasificador $f$ es más robusto si en media sobre $x$ una pequeña perturbación adversaria $\delta$ origina pequeñas variaciones, $\delta \mathcal{L}$, de la pérdida. Esto es, si $||\delta|| \leq \epsilon$, el polinomio de Taylor de grado uno en torno a $\epsilon$ muestra que
+$$\delta \mathcal{L} = \max_{\|\delta\|\leq \epsilon} \left| \mathcal{L}(x+\delta,c)-\mathcal{L}(x,c) \right| \approx \max_{\|\delta\|\leq \epsilon} \left| \nabla \mathcal{L}(x) \cdot \delta \right| = \epsilon |||\nabla \mathcal{L}(x)|||$$
+
+con $|||\cdot|||$ la norma dual de $\| \cdot \|$, teniendo en cuenta tanto que se usa la norma dual pues se supone que $\delta$ por ahora se ajusta de manera óptima sin restringirse a $\epsilon$ como que aunque para perturbaciones infinitesimales la aproximación por Taylor ajusta bien, para las que son finitas la expresión puede estar dominada por términos de alto grado.
+
+%Esto viene recogido en el siguiente lema, donde la norma en $l_p$ para $\{x_n\}$ una sucesión sería
+
+%$$||\{x_n\}||_p = \left(\sum_{n\in \mathbb{N}} |x_n|^{p} \right)^{\frac{1}{p}} < \infty$$
+
+\begin{lema} \label{lem25}
+Como aproximación de primer orden sobre \(\epsilon\), un ataque \(\epsilon\)-dimensionado generado con \(\|\cdot\|\) incrementa el coste, \(\mathcal{L}(x)\), en \(\epsilon |||\nabla \mathcal{L}(x)|||\) con \(|||\cdot|||\) la norma dual de \(\|\cdot\|\). En particular, un ataque \( l_p\)-dimensionado \(\epsilon\)-dimensionado incrementa el coste en \(\epsilon \|\nabla \mathcal{L}(x)\|_q\) para \(1 \leq p \leq \infty\) y \(\frac{1}{p} + \frac{1}{q} = 1\).
+
+\end{lema}
+
+Con el lema anterior, se puede extraer que la vulnerabilidad adversaria depende de factores tales como la norma, el $\epsilon$ escogido y el valor de $\mathbb{E}[|||\nabla \mathcal{L}(x)|||]$. Este último valor muestra la discrepancia entre lo detectado por un humano y lo detectado por el clasificador para un ataque de tamaño $\epsilon$. Se puede desprender de aquí que el límite que no debe superar $\epsilon$ es dado por la norma y la dimensión de entrada, d. Por ejemplo, para píxeles y perturbación $\delta$, aumentará con la norma $l_p$ como $d^{\frac{1}{p}}$, lo que sugiere escribir el límite buscado como $\epsilon_p = \epsilon_{\infty}d^{\frac{1}{p}}$, con $\epsilon_{\infty}$ siendo cierta constante.
+
+Otra idea que desprenden los autores del lema \ref{lem25} es la nueva pérdida en la red tras un $\| \cdot \|$-ataque $\frac{\epsilon}{2}$-dimensionado es
+$$\mathcal{L}_{\epsilon,|||\cdot|||}(x,c) := \mathcal{L}(x,c)+\frac{\epsilon}{2}|||\nabla \mathcal{L}(x)|||$$.
+
+Se podría pensar que la definición dada al inicio del subapartado y la expresión anterior tiene un conflicto de notación. En el primer caso $\epsilon$ da el límite del tamaño del ataque, y en el segundo caso refiere a la regularización. Esto muestra que no tiene una única interpretación. Si se añadiesen, en vez de usar la pérdida tras ataque, los datos de entrenamiento con ataques $x+\delta$ (escogida la norma y $\epsilon$), siendo $\delta$ el óptimo que maximiza la pérdida, se obtendría la función de coste
+$$\tilde{\mathcal{L}}_{\epsilon,||\cdot||}(x,c):=\frac{1}{2}(\mathcal{L}(x,c)+\mathcal{L}(x+\epsilon \delta,c))$$.
+
+Se llama a lo anterior un \textit{entrenamiento aumentado adversario}, introducido en Goodfellow et al.~\cite{GoodfLAdvers} tomando la norma infinito (lo llama entrenamiento FGSM-aumentado). Con el desarrollo de Taylor anterior, y la pérdida antes mostrada, reduce la pérdida tras ataque, que termina probando lo siguiente.
+
+\begin{proposicion}
+En una aproximación de primer orden en $\epsilon$, $\tilde{\mathcal{L}}_{\epsilon,\| \cdot \|}=\mathcal{L}_{\epsilon,|||\cdot|||}$ o, en otras palabras, para un $\epsilon$ suficientemente pequeño, el entrenamiento adversario aumentado con $\| \cdot \|$-ataques $\epsilon$-dimensionados va a penalizar el uso de la norma dual $|||\cdot |||$ de $\nabla \mathcal{L}(x)$ con $\frac{\epsilon}{2}$.
+\end{proposicion}
+
+Dicho esto, se puede evaluar la vulnerabilidad adversaria con la estimación de $||\nabla \mathcal{L}(x)||_q$. La idea principal propuesta en el artículo es "\textit{una neurona con varias entrada}", mostrando los autores la intuición detrás de esto, para los desarrollos posteriores. Se pasará a explicarlo para las redes neuronales profundas, cuyo teorema es consecuencia de otro más genérico para redes de alimentación (\textit{Feedforward nets}), acabando con una consecuencia del mismo para redes convolucionales, tema central del artículo.
+
+En primer lugar, para redes neuronales completamente conectadas se va a tomar una serie de hipótesis, que se llamarán $\mathcal{U}$:
+\begin{itemize}
+	\item  Las neuronas sin entradas son seguidas por una ReLU que apaga la mitad de sus entradas, independientemente de los pesos.
+	\item Las neuronas se dividen en capas, es decir, grupos
+que cada camino atraviesa como máximo una vez.
+	\item Todas las ponderaciones tienen 0 como media y varianza propuesta por He et al.~\cite{HeLAdvers}.
+	\item Los pesos entre capas son independientes.
+	\item Dos pesos distintos $w,w'$ de un mismo nodo cumplen $\mathbb{E}[ww']=0$.
+\end{itemize}
+
+En la práctica, siguiendo los pasos en He et al.(2015)~\cite{HeLAdvers}, las tres últimas hipótesis se cumplen por el diseño, la primera es por una buena aproximación (Balduzzi et al.(2017)~\cite{BalduzziLAdvers}). Además, los teoremas mostrados a continuación se sustentan en la estadística de las redes neuronales en la inicialización, siendo ciertos en la práctica.
+
+\begin{teorema}(Vulnerabilidad de redes completamente conectadas) \label{teom23}
+Sea una sucesión de capas completamente conectadas con activaciones ReLU, que toma entradas,$x$, de dimensión $d$, que satisface $\mathcal{U}$, salidas $f_k(x)$, que se alimenta por una capa final \textit{cross-entropy-loss}, $\mathcal{L}$. Las coordenadas de $\nabla f_k(x)$ crecen en $\frac{1}{\sqrt{d}}$ y 
+$$\| \nabla \mathcal{L}(x) \|_q \alpha d^{\frac{1}{q}-\frac{1}{2}}  \text{      ;      } \epsilon_p \| \nabla \mathcal{L}(x) \|_q \alpha \sqrt{d}$$
+significando $\alpha$ "\textit{ser proporcional a}".
+Estas redes son vulnerables a $l_p$-ataques con creciente dimensión de entrada.
+\end{teorema}
+
+La demostración tanto de este teorema como del siguiente son considerablemente largas. Por ello, solo se enunciarán los resultados auxiliares, sin probarlos.
+
+\begin{proof}
+Consideremos $x$ como un vector y x una coordenada genérica de $x$. Se distinguirá a \(\nabla \mathcal{L}(x)\) como el vector gradiente, y a \(\nabla \mathcal{L}(\text{x})\) como la coordenada asociada al vector gradiente. Se estimará \(||\nabla \mathcal{L}(\textbf{x})||_q\) evaluando el tamaño de las coordenadas del vector con la siguiente descomposición:
+
+$$\nabla \mathcal{L}(x)=\sum_{k=1}^{K} \frac{\partial \mathcal{L}}{\partial f_k}\frac{\partial f_k}{\partial x}:=\sum_{k=1}^{K} \partial_k \mathcal{L} \partial_x f_k$$
+
+donde $f_k(x)$ es la función de probabilidad logit de $x$ en la clase $k$.
+La demostración se dividirá en dos partes:
+
+\textbf{Primer paso: Propiedades estadísticas de $\partial_x f_k$}: Sea $\mathcal{P}(x,k)$ el conjunto de caminos $p$ de la neurona de entrada $x$ a la salida-logit $k$. Sean las neuronas sucesivas p-1 y p del camino $p$, y $\tilde{p}$ el mismo camino sin la neurona de entrada. Sea $w_{\text{p}}$ el peso de la neurona p-1 a la p y $w_p=\prod_{\text{p}\in \tilde{p}} w_{\text{p}}$ . Sea también $\sigma_\text{p}$ (resp. $\sigma_p$) igual a $1$ si la ReLU asociada se activa para $x$ y $0$ en otro caso.
+
+Tal y como se especifica en Balduzzi et al.~\cite{BalduzziLAdvers}, por la regla de la cadena, se ve que $\partial_x f_k(x)=\sum_{p \in \mathcal{P}(x,k)} w_p \sigma_p$. Así,
+$$\mathbb{E}_{W,\sigma}[\partial_x f_k(x)^2]=\sum_{p \in \mathcal{P}(x,k)} \prod_{\text{p} \in \tilde{p}} \mathbb{E}_W[w_\text{p}^2]\mathbb{E}_{\sigma}[\sigma_p^2] = |\mathcal{P}(x,k)|\prod_{p \in \tilde{p}} \frac{2}{d_{\text{p}-1}}\frac{1}{2}=\prod_{\text{p} \in \tilde{p}} d_p \cdot \prod_{\text{p}\in \tilde{p}} \frac{1}{d_{\text{p}-1}}=\frac{1}{d}$$
+
+que se desprende de las hipótesis $\mathcal{U}$ y de un lema, que indica que bajo $\mathcal{U}$, considerando $w_p$,$w_{p'}$ de los respectivos caminos $p$ y $p'$, empezando desde el mismo nodo de entrada x, se cumple $\mathbb{E}_W[w_p w_{p'}]=0 \text{ ; } \mathbb{E}_W[w_p^2]=\prod_{\text{p} \in \tilde{p}} \mathbb{E}_W[w_p^2]$ y, si hay algún peso de \textit{pooling} en $p$, entonces $\mathbb{E}_W[w_p]=0$. Así, la ecuación muestra que $|\partial_x f_k| \alpha \frac{1}{\sqrt{d}}$.
+
+\textbf{Paso 2: Propiedades estadísticas de $\partial_k \mathcal{L}$ y $\nabla \mathcal{L}(x)$}: Sea $q_k(x):=\frac{e^{f_k(x)}}{\sum_{j=1}^{K} e^{f_h(x)}}$. Por definición de \textit{cross-entropy loss}, $\mathcal{L}(x,c):=-log(q_c(x))$, con $c$ una etiqueta de una clase. Así
+
+$$\partial_k \mathcal{L}(x)= \begin{cases} 
+-q_k(x) & \text{si } k \neq c, \\
+1-q_c(x) & \text{en otro caso},\end{cases}$$
+$$\nabla \mathcal{L}(x)=(1-q_c)\partial_x f_c(x) + \sum_{k \neq c} q_k(-\partial_x f_k(x))$$
+
+Por el lema antes mencionado, se tiene que $\partial_x f_k(x)$ son K variables incorreladas y centradas. Entonces, $\nabla \mathcal{L}(x)$ es una aproximación de la suma de $K$ variables incorreladas con media cero y varianza $\frac{(1-q_c)^2 + \sum_{k \neq c} q_k^2}{d}$.
+
+Finalmente la magnitud de $\nabla \mathcal{L}(x)$ es $\frac{1}{\sqrt{d}}$ para todos los $x$, por lo que la norma $l_p$ de un gradiente de entrada completo es $d^{\frac{1}{q}-\frac{1}{2}}$.
+\end{proof}
+
+Como se mencionó antes, el teorema \ref{teom23} es un caso especial del siguiente teorema, que independiza las conclusiones mostradas de la topología de la red. Se asume la simetría en redes neuronales. Sea un camino $p$ y el grado del camino $p$,$d_p$, que es el multiconjunto de grados encontrados en el camino $p$. Para redes completamente conectadas, es una secuencia sin ordenar de tamaños de capa que hay en el camino. Ahora, si se considera $\{d_p\}_{p\in\mathcal{P}(x,o)}$, para todas las variantes $p$ de los posibles caminos desde la entrada $x$ a la salida $o$. Entonces, se hace la siguiente suposición, llamada $\mathcal{S}$:
+\begin{itemize}
+	\item Todos los nodos $x$ de entrada tienen asociado un multiconjunto $\{d_p\}_{p\in \mathcal{P}(x,o)}$ para ir de $x$ a $o$.
+\end{itemize}
+
+\begin{teorema}(Vulnerabilidad de redes de alimentación) \label{teom24}
+Sea una red de alimentación con conexiones lineales y funciones de activación ReLU. Se asume $\mathcal{U}$ y las salidas $f_k(x)$ que se alimenta por $\mathcal{L}$. Entonces $||\nabla f_k(x)||_2$ es independiente a la dimensión de entrada $d$ y $\epsilon_2 ||\nabla \mathcal{L}(x)||_2 \alpha \sqrt{d}$. Además, si se cumple $\mathcal{S}$, entonces $|\nabla f_k(x)|\alpha \frac{1}{\sqrt{d}}$, y si se suponen ciertas las proporcionalidades dadas en el teorema \ref{teom23}, se cumple $\| \nabla \mathcal{L}(x) \|_q \alpha d^{\frac{1}{q}-\frac{1}{2}}$ y $\epsilon_p \| \nabla \mathcal{L}(x) \|_q \alpha \sqrt{d}$.
+\end{teorema}
+
+Antes de probar el teorema, se enuncian ciertos lemas (uno de ellos usado en la demostración anterior).
+
+\begin{lema} \label{lem26}
+Sea $x$ el vector de entradas de un grafo acíclico dirigido, $o$ un nodo hoja, x una coordenada de $x$. Sea $p$ el camino de x a $o$, $\tilde{p}$ el camino sin el nodo x, p un nodo de $\tilde{p}$ y $d_p$ su grado de input. Entonces
+$$\sum_{\text{x}\in x} \sum_{\tilde{p} \in \mathcal{P}(x,o)}\prod_{p \in \tilde{p}} \frac{1}{d_p}=1$$
+\end{lema}
+
+\begin{lema} \label{lem27}
+Se supone cierto $\mathcal{S}$. Para $\text{x}\in x$
+$$\sum_{p \in \mathcal{P}(x,o)} \prod_{\text{p} \in \tilde{p}}\frac{1}{d_p}=\frac{1}{d}$$
+\end{lema}
+
+El siguiente lema fue usado en la demostración del teorema anterior.
+
+\begin{lema} \label{lem28}
+Suponiendo $\mathcal{U}$, los productos $w_p$,$w_{p'}$ para los caminos distintos $p$,$p'$, empezando en el mismo nodo de entrada x, se cumple
+
+$$\mathbb{E}_W[w_pw_{p'}]=0 \text{ ; } \mathbb{E}_W[w_p^2]=\prod_{\text{p} \in \tilde{p}} \mathbb{E}_W[w_p^2]$$
+
+Además, si hay al menos un peso de \textit{pooling} en $p$, entonces $\mathbb{E}_W[w_p]=0$.
+\end{lema}
+
+\begin{proof} (Teorema \ref{teom24})
+Para una neurona, p, de $\tilde{p}$, sea p-1 el nodo de $p$ previo a p. Sea $\sigma_{\text{p}}$ (resp. $\sigma_p$) una variable que vale cero si la neurona p se apaga por el funcionamiento de la ReLU (resp. $p$ está inactivo), y uno en otro caso. Entonces
+$$\nabla o(x) = \sum_{p \in \mathcal{P}(x,o)} \prod_{\text{p} \in \tilde{p}} \partial_{\text{p}-1} \text{p} = \sum_{p \in \mathcal{P}(x,o)} w_p \sigma_p$$
+
+Consecuentemente, 
+
+\begin{align}
+    \mathbb{E}_{W,\sigma}[(\nabla o(x))^2]=\sum_{p,p' \in \mathcal{P}(x,o)} \mathbb{E}_W[w_pw_{p'}]\mathbb{E}_{\sigma}[\sigma_p \sigma_{p'}] \\
+    &=\sum_{p \in \mathcal{P}(x,o)} \prod_{p \in \tilde{p}} \mathbb{E}_W[w_p^2]\mathbb{E}_{\sigma}[\sigma_p^2] \\
+    &=\sum_{p \in \mathcal{P}(x,o)} \prod_{p\in \tilde{p}} \frac{2}{d_p}\frac{1}{2}=\frac{1}{d}
+\end{align}
+
+
+donde se usa la primera hipótesis de $\mathcal{U}$ y los lemas \ref{lem26} y \ref{lem27}. El gradiente $\nabla o(x)$ tiene coordenadas cuyos cuadrados escalan según $\frac{1}{d}$. Así, cada coordenada escala con $\frac{1}{\sqrt{d}}$ y $\| \nabla o(x) \|_q$ con $d^{\frac{1}{2}-\frac{1}{q}}$. Por el segundo paso del teorema \ref{teom23}, se concluye con $\| \nabla \mathcal{L}(x) \|_q$ y $\epsilon \| \nabla \mathcal{L}(x) \|_q$.
+
+Finalmente, si no se cumpliese $\mathcal{S}$, por el lema \ref{lem26} se tiene
+$$\mathbb{E}[\| \nabla o(x) \|_2^2]=\sum_{\text{x} \in x} \mathbb{E}_W[(\nabla o(x))^2]=\sum_{\text{x} \in x} \sum_{p \in \mathcal{P}(x,o)} \prod_{\text{p} \in \tilde{p}} \frac{2}{d_p} \frac{1}{2}=1$$
+
+Por lo que, sin cumplirse $\mathcal{S}$, todavía se cumple la independencia de $\| \nabla o(x) \|_2$ con la dimensión de la entrada $d$.
+
+\end{proof}
+Finalmente, se desprende lo siguiente para el caso específico de redes neuronales convolucionales.
+
+\begin{corolario}
+Para cualquier sucesión de capas densas y convolucionales, con capas de \textit{stride} o no. con capas ReLU de activación, que satisface $\mathcal{U}$ y las salidas se alimentan por $\mathcal{L}$, el gradiente de las coordenadas de las salidas logit escala según $\frac{1}{\sqrt{d}}$ y, además, las proporcionalidades del teorema \ref{teom23} se cumplen. Por lo tanto, también serán vulnerables a ataques generados con norma $l_p$.
+\end{corolario}
+
+\section{Distribución de los datos}
+
+Otra de las posibilidades de que existan ejemplos adversario para hacer fallar a las redes puede ser que los datos que alimentan a la misma no sigan una distribución que haga que las características aprendidas por el modelo sean robustas. Se podría decir que la distribución es débil frente a modificaciones maliciosas.
+
+Nada más lejos de la realidad, decir que la distribución de los datos con los que se alimenta al modelo es débil es equivalente a admitir que existen ejemplos adversario inevitables, lo cual es volver a recrear el razonamiento antes expuesto de nuevo, pero teniendo en cuenta la distribución. Se presentan justificaciones aportadas en Shafahi et al.~\cite{ShafahiDebilDist} por lo que, para no hacer innecesariamente extensa la explicación, se mostrarán los argumentos que prueban la existencia de ejemplos adversarios desde el punto de vista de la distribución de los datos, usando resultados que aparecen en el artículo referenciado.
+
+\subsection{Debilidad de la distribución}
+
+A lo largo del artículo, los autores discuten la existencia de ataques adversario en los casos en que la distribución de los datos está en la esfera unidad, si está en el cubo unidad o incluso para ejemplos adversario escasos, tratando de dar una caracterización de la existencia de los ataques en el caso en que la distribución esté en el cubo unidad, probando aquellos resultados que muestren la existencia de los ejemplos en cada caso desarrollado.
+
+Aclarar, que cuando se habla de esfera y cubo unidad, se está hablando de la hiperesfera y el hipercubo unidad. Se denota $\Omega$ un subconjunto de puntos en los anteriores conjuntos.
+
+\subsubsection{Ejemplos adversario en la esfera unidad}
+
+\begin{definicion}
+Se define la $\epsilon$-expansión de $\mathcal{A} \subset \Omega$ con respecto a cierta métrica $d$, que se escribe como $\mathcal{A}(\epsilon,d)$ como todos los puntos que distan una distancia igual o menor a $\epsilon$ de todos los puntos en $\mathcal{A}$,
+$$\mathcal{A}(\epsilon,d)=\{x \in \Omega : d(x,y) \leq \epsilon \text{ } y \in \mathcal{A} \}$$
+
+Si la métrica usada es clara, se escribirá $\mathcal{A}(\epsilon)$.
+\end{definicion}
+
+Para poder probar el teorema clave para la esfera unidad, es necesario enunciar dos lemas, que no se van a probar (las demostraciones son largas, y aparecen en el artículo referenciado).
+
+\begin{lema}(Desigualdad isoperimétrica) \label{lem29}
+Sea un subconjunto $\mathcal{A} \subset \mathbb{S}^{n-1} \subset \mathbb{R}^n$ con medida (normalizada) $\mu(\mathcal{A}) \geq \frac{1}{2}$. Usando la métrica geodésica, $\mathcal{A}(\epsilon)$ es al menos tan grande como la $\epsilon$-expansión de media esfera.
+\end{lema}
+
+Al leer el lema es natural preguntarse qué es la $\epsilon$-expansión de media esfera. Se explica en el siguiente lema.
+
+\begin{lema}($\epsilon$-expasión de media esfera)
+La $\epsilon$-expansión (geodésica) de media esfera es aquella que tiene una medida normalizada es al menos
+
+$$1 - \left( \frac{\pi}{8}\right)^{\frac{1}{2}}\exp\left( -\frac{n-1}{2} \epsilon^2 \right)$$
+\end{lema}
+
+Finalmente, el siguiente teorema prueba la existencia de ejemplos adversario si la distribución seguida está en la esfera unidad, el cual es relativamente simple de probar con la desigualdad isoperimétrica.
+
+\begin{teorema}
+Considérese un problema de clasificación con $m$ clases distribuidas en $\mathbb{S}^{n-1} \subset \mathbb{R}^n$, con funciones densidad $\{\rho\}_{c=1}^m$. Sea la función clasificadora (red neuronal clasificadora) $f: \mathbb{S}^{n-1} \to \{1,\ldots,m\}$, que particiona la esfera en subconjuntos medibles disjuntos. 
+
+Se escribe $V_c := s_{n-1} \sup_x \rho_c(x)$ el supremo de $\rho_c$ relativo a la densidad uniforme ($s_{n-1}$ es cierta constante), y sea $f_c = \mu(\{x:f(x)=c\})$ la forma de escribir las particiones de la esfera.
+
+Sea una clase $c$ con $f_c \leq \frac{1}{2}$ y tómese un dato aleatorio $x$ de $\rho_c$. Entonces, con probabilidad, al menos, de $1 - V_c \left( \frac{\pi}{8} \right)^{\frac{1}{2}} \exp\left( -\frac{n-1}{2} \epsilon^2 \right)$, se cumple una de las siguientes condiciones:
+
+\begin{itemize}
+	\item $x$ hace fallar a $f$.
+	\item $x$ admite un ejemplo adversario para cierto $\epsilon$ con la distancia geodésica.
+\end{itemize}
+\end{teorema}
+
+\begin{proof}
+Sea $c$ la clase que cumple las hipótesis. Sea $R = \{x : f(x) = c\}$ la región de la esfera particionada por $c$, y $\mathbb{S}^{n-1} \setminus R$ su complementario. Sea su $\epsilon$-expansión, con la métrica geodésica, denotada por $\mathbb{S}^{n-1}\setminus R(\epsilon)$. Como el complementario de $R$ cubre al menos media esfera, por el lema \ref{lem29}, la expansión es al menos tanta como la correspondiente a media esfera, por lo que
+
+
+$$\mu(\mathbb{S}^{n-1}\setminus R(\epsilon)) \geq 1 - \left( \frac{\pi}{8} \right)^{\frac{1}{2}}\exp \left( -\frac{n-1}{2}\epsilon^2 \right)$$
+
+Considérese que $S_c$ son los puntos que se clasifican bien y no admiten ejemplos adversario. Esto es, está en $R$ y no en su complementario. Además, para que un punto esté libre de perturbaciones no puede encontrarse a una distancia inferior del límite de la clase, en caso contrario estaría en $\mathbb{S}^{n-1}\setminus R(\epsilon)$. Así, se ve que $S_c$ es el complementario de $\mathbb{S}^{n-1}\setminus R(\epsilon)$, por lo que su medida normalizada se acota
+$$\mu[S_c] \leq \left( \frac{\pi}{8} \right)^{\frac{1}{2}}\exp \left( - \frac{n-1}{2} \epsilon^2 \right)$$ 
+
+La probabilidad de que un punto aleatorio caiga en $S_c$ está limitada por el siguiente producto
+$$V_c \left( \frac{\pi}{8} \right)^{\frac{1}{2}}\exp \left( -\frac{n-1}{2} \epsilon^2 \right) $$
+
+De donde se concluye que un punto cae fuera de la región de correcta clasificación con probabilidad $1 - V_c \left( \frac{\pi}{8} \right)^{\frac{1}{2}} \exp\left( -\frac{n-1}{2} \epsilon^2 \right)$.
+\end{proof}
+
+\subsubsection{Ejemplos adversario en el cubo unidad}
+
+En el caso de considerar que la distribución seguida está en el cubo unidad, el proceso para probar la existencia de ejemplos adversario es el mismo: usar la desigualdad isoperimétrica (en un cubo) y enunciar el teorema, el cual se prueba haciendo uso del teorema para la esfera unidad. En esencia la conclusión es la misma que la expuesta en Diochnos et al.~\cite{LimitsAdvers}.
+
+\begin{lema} (Desigualdad isoperimétrica en el cubo) \label{desisocubo}
+Sea $\mathcal{A} \subset [0,1]^n$ medible y la métrica derivada de la norma $p>0$, $d_p(x,y)=||x-y||_p$. Sea $\psi(x)=(2 \pi)^{-\frac{1}{2}} \int_{- \infty}^x e^{-\frac{t^2}{2}}dt$ y $\beta$ escalar que cumple $\psi(\beta)=\mu(\mathcal{A})$. Entonces
+$$\mu(\mathcal{A}(\epsilon,d_p)) \geq \psi \left( \beta+\frac{\sqrt{2 \pi n}}{n^{\frac{1}{p^*}}} \epsilon \right)$$
+con $p^*=\min(p,2)$. En particular, si $\mu(\mathcal{A}) \geq \frac{1}{2}$, entonces
+$$\mu(\mathcal{A}(\epsilon,d_p)) \geq 1 - \frac{\exp(-2 \pi n^{1-\frac{2}{p*}}\epsilon^2)}{2 \pi \epsilon n^{\frac{1}{2}-\frac{1}{p*}}}$$
+\end{lema}
+
+El teorema que muestra lo buscado es el siguiente, que se puede probar con el lema.
+
+\begin{teorema} \label{teomcubo}
+Sea un problema de clasificación con $m$ clases distribuidas en torno al cubo unidad $[0,1]^n$ con funciones densidad $\{\rho_c\}_{c=1}^m$. Sea $f:[0,1]^n \to \{1,\ldots,m\}$ un clasificador que particiona el cubo en subconjuntos medibles disjuntos. Sean los escalares $U_c=\sup_x \rho_c(x)$ y $f_c$ la parte del cubo particionada para $c$ por $f$.
+
+Para $c$ clase con $f_c \leq \frac{1}{2}$ y una norma $l_p$ con $p>0$, sea $p^*=\min(p,2)$. Tómese un punto aleatorio de distribución dada por $\rho_c$. Entonces, con probabilidad al menos de $1 - U_c\frac{\exp(-2 \pi n^{1-\frac{2}{p^*}}\epsilon^2)}{2 \pi \epsilon n^{\frac{1}{2}-\frac{1}{p^*}}}$, se cumple una de los siguientes casos
+
+\begin{itemize}
+	\item $f$ no clasifica bien al punto $x$, elegido aleatoriamente.
+	\item Existe un ejemplo adversario de $x$, $\hat{x}$, tal que $||x-\hat{x}||_p \leq \epsilon$
+\end{itemize}
+\end{teorema}
+
+\begin{proof}
+Tómese $c$ clase tal que $f_c \leq \frac{1}{2}$ y sea $R=\{x:f(x)=c\}$ subconjunto del cubo asociado a la partición de $f_c$ según $c$. Sea $[0,1]^n \setminus R$ el complementario, y para la norma $l_p$ tómese $[0,1]^n \setminus R(\epsilon,d_p)$. Como el complementario de $R$ recubre al menos medio cubo, por la desigualdad isoperimétrica para el cubo, $\mu([0,1]^n \setminus R(\epsilon,h)) \geq 1-\delta$, donde $\delta=\frac{\exp(-2 \pi n^{1-\frac{2}{p*}} \epsilon^2)}{2 \pi \epsilon n^{\frac{1}{2}-\frac{1}{p*}}}$
+\end{proof}
+
+\subsubsection{Caracterización de la existencia de ejemplos adversario}
+
+Finalmente, tras probar la existencia de ejemplos adversario suponiendo que los datos siguen una distribución en el cubo o esfera unidad, se termina caracterizando la existencia de ejemplos adversario.
+
+\begin{teorema}
+Considérense las hipótesis del teorema \ref{teomcubo}. Sea $c$ una clase que ocupa parte del cubo, $f_c < \frac{1}{2}$. Tómese la norma de $l_p$ y $p^*=min(p,2)$.
+
+Sea sop($\rho_c$) el soporte de $\rho_c$. Entonces existe un $x$ con $\rho_c(x)>0$ que admite un ejemplo adversario para cierto $\epsilon$ si
+
+$$\mu(sop(\rho_c)) \geq \begin{cases} 
+\frac{1}{2} \exp(- \pi \epsilon^2 n^{1-\frac{2}{p^*}}) & \text{si } p > 0 \\
+\exp\left( \frac{-2 \left( \epsilon - \sqrt{\frac{n ln(2)}{2}} \right)^2}{n} \right) & \text{si } p = 0 
+\end{cases}$$
+
+Y el caso $p=0$ es solo válido si $\epsilon \geq \sqrt{\frac{n ln(2)}{2}}$
+\end{teorema}
+
+\begin{proof}
+Se va a denotar como $\mathcal{A}$ al soporte de $p_c$, y supóngase que tiene medida $\mu(\mathcal{A})=\eta$. Se verá que para un $\epsilon$ suficientemente grande, la expansión $\mathcal{A}(\epsilon,d_p)$ es mayor que medio cubo. Como $c$ ocupa menos de medio cubo, podría ocurrir que $\mathcal{A}(\epsilon,d_p)$ se solape con otras clases, por lo que obligatoriamente hay puntos en $\mathcal{A}$ con ejemplos adversario para $\epsilon$.
+
+Si $p>0$, por el lema \ref{desisocubo}, se limita $\mathcal{A}(\epsilon,d_p)$. Para ello hay que aproximar $\psi^{-1}(\eta)$, por lo que usando
+$$\psi(\beta)=\frac{1}{2 \pi} \int_{- \infty}^{\beta} e^{-\frac{t^2}{2}} dt \leq \frac{1}{2} e^{-\frac{\beta^2}{2}}$$
+cierto para $\beta < 0$ se tiene que,
+$$\beta \geq - \sqrt{ln \left( \frac{1}{4 \psi(\beta)^2} \right)}$$
+
+Ahora, si $\beta=\psi^{-1}(\eta)$, entonces $\eta=\psi(\beta)$, y por la desigualdad anterior, $\beta \geq - \sqrt{ln(\frac{1}{4 \eta^2})}$. Por la primera ecuación del lema \ref{desisocubo}, se obtiene
+$$\mu(\mathcal{A}(\epsilon,d_p) ) \geq \psi(\beta + \epsilon) \geq \psi \left( - \sqrt{ln \left( \frac{1}{4 \eta^2} \right) }+\frac{\sqrt{2 \pi n}}{n^{\frac{1}{p^*}}}\epsilon \right)$$
+
+La parte de la izquierda es mayor a $\frac{1}{2}$, lo que garantiza ejemplos adversario si 
+$$\frac{\sqrt{2 \pi n}}{n^{\frac{1}{p^*}}}\epsilon > \sqrt{ln \left( \frac{1}{4 \eta^2} \right) }$$
+
+Tras unas operaciones, se obtiene lo buscado.
+
+Si $p=0$, con la ecuación usada en la demostración del lema 2.10 en Shafahi et al.~\cite{ShafahiDebilDist}, se consigue ver que
+$$\mu(\mathcal{A}(\epsilon,d_0)) \geq 1 - \exp \left( - \frac{2}{n} \left( \epsilon - \sqrt{n \frac{ln(\frac{1}{\eta})}{2}} \right)^2 \right)$$.
+
+Esto da garantía de la existencia de ejemplos adversario si $ \exp \left(- \frac{2}{n} \left( \epsilon - \sqrt{n \frac{ln(\frac{1}{\eta})}{2}} \right)^2 \right) < \frac{1}{2}$, que es cierto si
+$$\eta > \exp \left( - \frac{2 \left( \epsilon - \sqrt{n \frac{ln(2)}{2}} \right)^2}{n} \right)$$
+\end{proof}
+
+\section{Propiedades y características de los datos}
+
+Anteriormente se probó que tanto la dimensionalidad de los datos, como la distribución que siguen los datos, son propiedades determinantes para la existencia de ejemplos adversario, con las consecuencias que ello acarrea. Cabe entonces pensar en que se podrían explotar otras características de los datos para analizar la existencia de ejemplos adversario, tales como cuántos datos son necesarios para una buena generalización (y minimizar el daño que causen ataques a la red desde el punto de vista de los datos), la forma que tiene la red de clasificar las características, idóneamente robustas, para futuras predicciones, o la abstracción del propio conjunto de datos, en lugar de fijarse únicamente en el dato.
+
+\subsection{Propiedades del conjunto de datos}
+Una de las características que debe tener un modelo para que sea eficaz frente a la existencia de ataques que creen ejemplos adversario es la correcta generalización del mismo. Si, para un problema específico, aprende características consistentes de los datos, tenderá a fallar menos y, consecuentemente, a minimizar el daño si se presentan ejemplos adversario. Por lo tanto, se han realizado varios estudios, tanto teóricos como experimentales, que se centran en las propiedades del propio conjunto de datos con el que se entrena la red.
+
+Se muestran los resultados obtenidos por los autores en Ludwig et al.~\cite{RequiresDataLudwig}, motivados por el sobreajuste de un modelo de redes neuronales profundas al conjunto de datos CIFAR10, centrándose en el modelo del mismo conjunto, que es gaussiano (o normal), aunque otros conjuntos de datos como MNIST siguen el modelo de Bernoulli, mayormente explicado en el propio artículo.
+
+El objetivo será obtener límites inferiores para un modelo gaussiano, que se acabará probando, usando una serie de resultados auxiliares y definiciones.
+
+\begin{definicion}
+Sea $\theta^* \in \mathbb{R}^n$ un vector de medias por clase y $\sigma^2 > 0$ la varianza. Se define el modelo gaussiano ($\theta^*$,$\sigma^2$) aquel definido por la siguiente distribución sobre $(x,y) \in \mathbb{R}^n \times \{-1,1\}$: "Primero se toma aleatoriamente una etiqueta $y \in \{-1,1\}$ uniformemente. Después se toma aleatoriamente $x \in \mathbb{R}^n$ de $\mathcal{N}(y \cdot \theta^* \text{,}\theta I_n)$", donde $I_n$ es la matriz identidad de orden $n$.
+\end{definicion}
+
+Salvo que se especifique, se tomará $\theta^*$ aquel con norma, aproximadamente, $\sqrt{n}$. Además, es necesario contrastar los conceptos de generalización estándar y generalización robusta, para los cuales se necesita volver a las definiciones 2.2 y 2.3, pero con ligeras variaciones para ajustar al problema en el que se centra la sección.
+
+\begin{definicion} (Variante de definición \ref{def22})
+Sea $\mathcal{P}: \mathbb{R}^n \times \{-1,1\}  \to \mathbb{R}$ una distribución. Se define el error de clasificación $\beta$, de un clasificador, $f: \mathbb{R}^n \to \{-1,1\}$, como $\beta = \mathbb{P}_{(x,y)\sim\mathcal{P}}[f(x) \neq y]$
+\end{definicion}
+
+Sin embargo, la definición sobre la que se va a centrar el resto de la sección es el siguiente.
+
+\begin{definicion} (Variante de la definición \ref{def23})
+Sea $\mathcal{P}: \mathbb{R}^n \times \{-1,1\}  \to \mathbb{R}$ una distribución y $\mathbb{B}: \mathbb{R}^n \to P(\mathbb{R}^n)$ el conjunto de perturbación ($P(\mathbb{R}^n)$ es el conjunto de todos los subconjuntos de $\mathbb{R}^n$). Se define el error de clasificación $\mathbb{B}$-robusto $\beta$ del clasificador $f: \mathbb{R}^n \to \{-1,1\}$ el definido como $\beta = \mathbb{P}_{(x,y) \sim \mathcal{P}}[\exists x' \in \mathbb{B}(x):f(x')=y]$
+\end{definicion}
+
+El trabajo hecho por los autores se centra en las perturbaciones $l_{\infty}$ debido a la creciente atención en ellas, por lo que la robustez con respecto al conjunto de perturbación antes mencionado será $\mathcal{B}_{\infty}^\epsilon (x)=\{x' \in \mathbb{R}^n : ||x'-x||\leq \epsilon \}$. Además, se referirá a este conjunto como robustez $l_{\infty}^\epsilon$.
+
+En el caso del modelo gaussiano se puede controlar la dificultad de aprendizaje de un buen clasificador con un parámetro. Además, para simplificar los límites objetivo, los autores hiceron un estudio en el que se muestra que es posible llegar a un buen error de clasificación estándar con una única muestra (aunque puede generalizarse a varias). En concreto, se establece el siguiente teorema relacionado con ello,usando un clasificador lineal $f_w : \mathbb{R}^n \to \{-1,1\}$ definido como $f_w (x)=\text{sgn} (\langle w,x \rangle)$
+
+\begin{teorema}
+Sea $(x,y)$ tomado de un modelo gaussiano ($\theta^* \text{,}\sigma^2$) con $\|\theta^* \|_2 = \sqrt{n}$ y $\sigma^2 \leq c \cdot n^{\frac{1}{4}}$, con $c$ una constante universal. Sea $\hat{w} \in \mathbb{R}^n$ el vector $\hat{w}= y \cdot x$. Entonces, con alta probabilidad, el error de clasificación del clasificador lineal $f_{\hat{w}}$ es como mucho del $1\%$.
+
+\end{teorema}
+
+Tal y como se mencionó, se puede generalizar el resultado de una única muestra.
+
+\begin{corolario} \label{coro28}
+Sea $(x,y)$ tomado del modelo gaussiano ($\theta^* \text{,}\sigma^2$) tal que 
+$$\sigma^2 \leq \frac{n^{\frac{1}{4}}}{5 \sqrt{ln(1/\beta)}}$$
+Sea $\hat{w} \in \mathbb{R}^n$ el vector unitario $\hat{w}=\frac{y x}{||x||_2}$. Entonces, con probabilidad de al menos $1-2 \exp \left( -\frac{n}{8(\sigma^4 + 1)} \right)$, el error de clasificación del clasificador lineal $f_{\hat{w}}$ es como mucho $\beta$.
+\end{corolario}
+
+Para la demostración es necesario el uso del siguiente teorema, sobre generalización estándar en un modelo gaussiano.
+
+\begin{teorema} \label{teom29}
+Sean $(x_1,y_1),\ldots,(x_N,y_N) \in \mathbb{R}^n \times \{-1,1\}$, independientes e idénticamente distribuidos, tomados de un modelo gaussiano ($\theta^* \text{,}\sigma^2$) con $\|\theta^* \|_2=\sqrt{n}$. Sea $\hat{w}\in\mathbb{R}^n$ el vector unidad en la dirección $\tilde{z}=\frac{1}{N} \sum_{i=1}^N y_i x_i$, luego $\hat{w}=\frac{\tilde{z}}{\|\hat{z} \|_2}$. Entonces, con probabilidad al menos de $1-2 \exp(-\frac{n}{8(\sigma^4 + 1)})$, el error de clasificación del clasificador lineal $f_{\hat{w}}$ es, como mucho
+$$\exp \left( -\frac{(2 \sqrt{N}-1)^2 n}{2(2 \sqrt{N} + 4\sigma^2)^2\sigma^4} \right)$$
+\end{teorema}
+
+\begin{proof} (Corolario \ref{coro28})
+Por el teorema \ref{teom29}, para $N=1$, se tiene un límite del error de clasificación de 
+
+$$\beta' = \exp \left( - \frac{n}{2(2+4\sigma^2)\sigma^4} \right) \leq \beta$$
+
+Por otro lado, se va a delimitar el denominador de $\beta'$. Primero,
+$$2 + 4 \sigma^2 \leq 2 n^{\frac{1}{4}}+\frac{4}{5} n^{\frac{1}{4}} \leq 3 n^{\frac{1}{4}}$$
+
+Finalmente se acota todo el denominador
+$$2(2+4 \sigma^2)^2 \sigma^4 \leq 2 \cdot 9 \sqrt{n} \cdot \frac{\sqrt{n}}{25 ln(1/\beta)} \leq \frac{n}{ln \left( \frac{1}{\beta} \right)}$$
+y, si se sustituye en $\beta'$, se tiene el error de clasificación buscado.
+\end{proof}
+
+A continuación, los autores proceden a probar que si se quiere conseguir un error bajo en la clasificación con la norma $l_{\infty}$ se necesitan varias muestras.
+
+\begin{teorema}
+Sean $(x_1,y_1),\ldots,(x_N,y_N)$ muestras aleatorias independientes e idénticamente distribuidas de un modelo gaussiano ($\theta^*\text{,}\sigma^2$) con $\|\theta^* \|_1=\sqrt{n}$ y $\sigma^2 \leq c_1 n^{\frac{1}{4}}$. Sea $\hat{w} \in \mathbb{R}^n$ el vector media ponderado $\hat{w}=\frac{1}{N} \sum_{i=1}^N y_i x_i$. Entonces, con alta probabilidad, el clasificador lineal $f_{\hat{w}}$ tiene un error de clasificación robusto $l_{\infty}$ de, como mucho, el $1\%$, si
+$$n \geq 
+\begin{cases} 
+1 & \text{si } \epsilon \leq \frac{1}{4}n^{-\frac{1}{4}} \\
+c_2 \epsilon^2 \sqrt{n} & \text{si } \frac{1}{4}n^{-\frac{1}{4}} \leq \epsilon \leq \frac{1}{4}
+\end{cases}
+$$
+
+donde $c_1$ y $c_2$ son constantes universales.
+\end{teorema}
+
+El teorema muestra que es posible obtener un clasificador robusto $l_{\infty}^\epsilon$ en un modelo gaussiano si $\epsilon$ puede ser acotado por una pequeña constante y se tiene el número suficiente de muestras.
+
+Se está en condiciones entonces de enunciar y probar el teorema central de los autores, que establece cotas inferiores para el modelo gaussiano. De él se pueden extraer muchos más resultados referenciados en el propio artículo, además de obtener una serie de consecuencias que se comentarán más adelante.
+
+\begin{teorema}
+Sea $\mathcal{A}_N$ un algoritmo de aprendizaje, o función para $N$ muestras en $\mathbb{R}^n \times \{-1,1\}$ a un clasificador lineal $f_N$. Sean $\sigma^2 > 0$, $\epsilon \geq 0$ y $\theta \in \mathbb{R}^n$ de la distribución normal estándar. Además, se toman $N$ muestras del modelo gaussiano ($\theta\text{,}\sigma^2$). Entonces el error de clasificación robusto $l_{\infty}^\epsilon$ esperado del clasificador $f_N$ es, al menos, de
+$$\frac{1}{2} \mathbb{P}_{v \sim \mathcal{N}(0,1)} \left[ \sqrt{\frac{n}{\sigma^4 + n}} \|v \|_{\infty} \leq \epsilon \right]$$
+\end{teorema}
+
+\begin{proof}
+Primero se define el error de clasificación robusto $l_{\infty}^\epsilon$ esperado para $f_N$ como
+$$\Xi = \mathbb{E}_{\theta \sim \mathcal{N}(0,1)} \left[ \mathbb{E}_{y_1,\ldots,y_N \sim \mathcal{R}} \left[ \mathbb{E}_{x_1,\ldots,x_N \sim \mathcal{N}(y_i \theta, \sigma^4 I_n)} \left[ \mathbb{E}_{y \sim \mathcal{R}} \left[ \mathbb{P}_{x \sim \mathcal{N}(y \theta,\sigma^4 I_n)} [ \exists x' \in \mathbb{B}_{\infty}^\epsilon (x): f_n(x') \neq y ] \right] \right] \right] \right]$$
+
+donde $f_N=\mathcal{A}_N((x_1,y_1),\ldots,(x_N,y_N))$ depende de las muestras pero no de $\theta$, lo que será crucial más adelante.
+
+Se reorganiza lo esperado tomando $z_i \sim \mathcal{N}(\theta,\sigma^4 I_n)$, y se tiene en cuenta que se puede muestrear sin que las muestras dependan de la clase $y_i$. Si $f_N=\mathcal{A}_N((y_1 z_1,y_1),\ldots,(y_N z_N, y_N))$, entonces
+
+\begin{multline}
+\Xi = \mathbb{E}_{\theta \sim \mathcal{N}(0,1)} \left[ \mathbb{E}_{y_1,\ldots,y_N \sim \mathcal{R}} \left[ \mathbb{E}_{z_1,\ldots,z_N \sim \mathcal{N}(\theta, \sigma^4 I_n)} \left[ \mathbb{E}_{y \sim \mathcal{R}} \left[ \mathbb{P}_{x \sim \mathcal{N}(y \theta,\sigma^4 I_n)} [ \exists x' \in \mathbb{B}_{\infty}^\epsilon (x): f_n(x') \neq y ] \right] \right] \right] \right]  \\
+= \mathbb{E}_{y_1,\ldots,y_N \sim \mathcal{R}} \left[ \mathbb{E}_{\theta \sim \mathcal{N}(0,I_n)} \left[ \mathbb{E}_{z_1,\ldots,z_N \sim \mathcal{N}(\theta,\sigma^4 I_n)} \left[ \mathbb{E}_{y \sim \mathcal{R}} \left[ \mathbb{P}_{x \sim \mathcal{N}(y \theta,\sigma^4 I_n)} [\exists x' \in \mathbb{B}_{\infty}^\epsilon (x): f_N(x') \neq y] \right] \right] \right] \right]
+\end{multline}
+
+donde en la segunda línea se permutan las dos primeras esperanzas.
+
+Se puede observar que la distribución condicionada a $\theta$, dada por $z_i$, es una gaussiana multivariante, con parámetros
+$$\mu' = \frac{n}{\sigma^4 + n} \tilde{z}$$
+$$\Sigma' = \frac{\sigma^4}{\sigma^4 + n}I_n$$
+tomando $\tilde{z} = \sum_{i=1}^N z_i$. Por otra parte, sea $\mathcal{M}$ la distribución marginal sobre $(z_1,\ldots,z_N)$ integrando respecto $\theta$. Entonces
+
+$$\Xi = \mathbb{E}_{y_1,\ldots,y_N \sim \mathcal{R}} \left[ \mathbb{E}_{(z_1,\ldots,z_N) \sim \mathcal{M}} \left[ \mathbb{E}_{\theta \sim \mathcal{N}(\mu',\Sigma')} \left[ \mathbb{E}_{y \sim \mathcal{R}} \left[ \mathbb{P}_{x \sim \mathcal{N}(y \theta,\sigma^4 I_n)} [\exists x' \in \mathbb{B}_{\infty}^\epsilon (x) : f_N(x') \neq y] \right] \right] \right] \right]$$
+
+Tómese ahora $\Psi = \mathbb{E}_{\theta \sim \mathcal{N}(\mu',\Sigma')} \left[ \mathbb{E}_{y \sim \mathcal{R}} \left[ \mathbb{P}_{x \sim \mathcal{N}(y \theta,\sigma^4 I_n)} [\exists x' \in \mathbb{B}_{\infty}^\epsilon (x) : f_N(x') \neq y] \right] \right]$, el cual se buscará acotar. Para empezar, como depende de $\theta$ por $x$, se puede combinar la esperanza del modelo gaussiano con la probabilidad de una distribución gaussiana tras permutar hacia fuera la esperanza sobre el valor de $y$, lo que da
+
+\begin{multline}
+\Psi = \mathbb{E}_{\theta \sim \mathcal{N}(\mu',\Sigma')} \left[ \mathbb{E}_{y \sim \mathcal{R}} \left[ \mathbb{P}_{x \sim \mathcal{N}(y \theta,\sigma^4 I_n)} [\exists x' \in \mathbb{B}_{\infty}^\epsilon (x):f_N(x') \neq y] \right] \right] \\
+= \mathbb{E}_{y \sim \mathcal{R}} \left[ \mathbb{E}_{\theta \sim \mathcal{N}(\mu',\Sigma')} \left[ \mathbb{P}_{x \sim \mathcal{N}(y \theta, \sigma^4 I_n)} [\exists x' \in \mathbb{B}_{\infty}^\epsilon (x): f_N(x') \neq y] \right] \right] \\
+= \mathbb{E}_{y \sim \mathcal{R}} \left[ \mathbb{P}_{x \sim \mathcal{N}(y \mu',\Sigma' + \sigma^4 I_n)} [\exists x' \in \mathbb{B}_{\infty}^\epsilon (x): f_N(x') \neq y] \right]
+\end{multline} 
+
+Se continua con el caso $y=1$ (el caso $y=-1$ es análogo). Sea $A_{-} \subset \mathbb{R}^n$ el conjunto de datos de entrada para los que el clasificador devuelve $-1$, $A_{-}=\{x:f_N(x) = -1\}$. Puede ser tratado como un conjunto fijo pues solo depende de las muestras $z_i$ y las etiquetas $y_i$, no de $\theta$ o el nuevo muestreo $x$.  Se reescribe entonces como
+
+$$\{x| \exists x' \in \mathbb{B}_{\infty}^\epsilon(x) : f_N(x') \neq 1\} = \{x| \exists x' \in A_{-} : \|x-x' \|_{\infty} \leq \epsilon \} = \mathbb{B}_{\infty}^\epsilon (A_{-})$$
+
+Siempre y cuando $\|\mu' \| \leq \epsilon$, $\mathbb{B}_{\infty}^\epsilon (A_{-})$ contiene al conjunto $A_{-}$ desplazado por $\mu'$ y $- \mu'$, por lo que, si $\Sigma''=\Sigma' + \sigma^4 I_n$,
+
+$$\mathbb{P}_{x \sim \mathcal{N}(\mu',\Sigma'')} [\exists x' \in \mathbb{B}_{\infty}^\epsilon (x): f_N(x') \neq 1] = \mathbb{P}_{\mathcal{N}(\mu',\Sigma'')}[\mathbb{B}_{\infty}^\epsilon (A_{-})] \geq \mathbb{1}_{(\|\mu' \|_{\infty} \leq \epsilon)} \cdot \mathbb{P}_{\mathcal{N}(0,\Sigma'')} [A_{-}]$$
+
+
+Usando el mismo argumento si $y=-1$, sustituyendo en la expresión de $\Psi$, se tiene
+\begin{multline}
+\Psi \geq \mathbb{E}_{y \sim \mathcal{R}} \left[ \mathbb{1}_{(\|\mu' \|_{\infty} \leq \epsilon)} \cdot \mathbb{P}_{\mathcal{N}(0,\Sigma'')} [A_{-sgn(y)}] \right] = \mathbb{1}_{(\|\mu' \|_{\infty} \leq \epsilon)} \cdot \frac{1}{2} \left( \mathbb{P}_{\mathcal{N}(0,\Sigma'')}[A_{-}] + \mathbb{P}_{\mathcal{N}(0,\Sigma'')}[A_{+}] \right) \\
+= \frac{1}{2} \mathbb{1}_{(\|\mu' \|_{\infty} \leq \epsilon)}
+\end{multline}
+
+Nótese que $A_{-}$ y $A_{+}$ son complementarios, y la medida bajo ellos es 1.
+
+Sustituyendo en la expresión de $\Xi$,
+
+\begin{multline}
+\Xi \geq \mathbb{E}_{y_1,\ldots,y_N \sim \mathcal{R}} \left[ \mathbb{E}_{(z_1,\ldots,z_N) \sim \mathcal{M}} \left[ \frac{1}{2} \mathbb{1}_{(\|\mu' \|_{\infty} \leq \epsilon)} \right] \right] = \frac{1}{2} \mathbb{E}_{(z_1,\ldots,z_N) \sim \mathcal{M}} [\mathbb{1}_{(\|\mu' \|_{\infty} \leq \epsilon)}] \\
+= \frac{1}{2} \mathbb{P}_{(z_1,\ldots,z_N) \sim \mathcal{M}} \left[ \frac{N}{\sigma^4 + N} \|\tilde{z} \|_{\infty} \leq \epsilon \right]
+\end{multline}
+
+Tras esto es natural pensar que se debe analizar la distribución de $\tilde{z}$. Nótese que, condicionando al vector $\theta_2 \sim \mathcal{N}_n (0,I_n)$, la distribución de cada $z_i$ es $\mathcal{N}(\theta_2,\sigma^4 I_n)$. Además, la distribución de $\tilde{z}$ condicionado a $\theta_2$ es $\mathcal{N}(\theta_2,\frac{\sigma^4}{n} I_n)$, e integrando respecto $\theta_2$, la distribución marginal sería $\mathcal{N}(0,(1+\frac{\sigma^4}{n})I_n)$.
+
+En general, se obtiene
+
+$$\Xi \geq \frac{1}{2} \mathbb{P}_{\theta_2 \sim \mathcal{N}(0,(1+\frac{\sigma^4}{N})I_n)} \left[ \frac{N}{\sigma^4 + N} \|\theta_2 \|_{\infty} \leq \epsilon \right] = \frac{1}{2} \mathbb{P}_{\theta_2 \sim \mathcal{N}(0,I_n)} \left[ \sqrt{\frac{N}{\sigma^4 + N}} \|\theta_2 \|_{\infty} \leq \epsilon \right]$$
+
+donde se ha tenido en cuenta que
+
+$$\frac{N}{\sigma^4 + N} \sqrt{1 + \frac{\sigma^4}{N}} = \sqrt{\frac{N}{\sigma^4 + N}}$$
+
+\end{proof}
+
+Hay una serie de resultados análogos en el caso de que el conjunto de datos siga una modelo de Bernoulli.
+
+%\section{Subespacio de los datos}
+%TEXTO INTRODUCTORIO
+%\subsection{Patrones anormales en el subespacio}
+%Detección
+%Gilad Cohen, Guillermo Sapiro, and Raja Giryes. 2020. Detecting adversarial samples using inluence functions and nearest neighbors.
+%In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. 14453Ś14462.
+
+%\subsection{Propiedades del subespacio de datos adversario}
+%Detección
+%Xingjun Ma, Bo Li, Yisen Wang, Sarah M Erfani, Sudanthi Wijewickrema, Grant Schoenebeck, Dawn Song, Michael E Houle, and James
+%Bailey. 2018. Characterizing adversarial subspaces using local intrinsic dimensionality. arXiv preprint arXiv:1801.02613 (2018).
+
+%\section{Características de los datos}
+%TEXTO INTRODUCTORIO
+
+\subsection{Aprendizaje no robusto}
+%Andrew Ilyas, Shibani Santurkar, Dimitris Tsipras, Logan Engstrom, Brandon Tran, and Aleksander Madry. 2019. Adversarial examples
+%are not bugs, they are features. arXiv preprint arXiv:1905.02175 (2019).
+
+Volviendo al caso expuesto al inicio del capítulo, se recuerda que el modelo entrenado para reconocer tanques no había aprendido bien, pues el conjunto de datos de entrenamiento no era bueno. El algoritmo aprendió una serie de características que no se podría considerar eran robustas, esto es, para clasificar tanques no aprendió aquellas características que describían un tanque en una imagen. Ello lleva a pensar que una vulnerabilidad existente en los datos es cómo son estos datos y si contienen las características necesarias para una buena clasificación.
+
+Tomando como referencia lo desarrollado en Ilyas et al.~\cite{NoRobustFeatures}, se muestra cómo de la calidad de los datos se deriva en que el modelo de redes neuronales profundas pueda llegar a ser más o menos resistente al aprendizaje de características no robustas, o a la clusterización de los datos según considere en caso de aprendizaje no supervisado. Se presenta un framework teórico para el estudio de características no robustas en los datos.
+
+En primer lugar, es necesario conocer qué es una característica a lo largo del desarrollo, diferenciando entre características robustas, no robustas y útiles.
+
+\begin{definicion}
+Una característica se define como una función desde el espacio de entrada $\mathcal{X}$ de números reales, y su conjunto se denotará como $\mathcal{F} = \{c: \mathcal{X} \to \mathbb{R}\}$. Se supondrá que serán de media cero y varianza uno, por simplicidad.
+\end{definicion}
+
+Se introducen también conceptos clave a lo largo de la sección.
+
+\begin{definicion}
+Una característica $\rho$-útil se define, dada la distribución $\mathcal{D}$, con $\rho > 0$, como aquella que está correlada con la etiqueta correcta, esto es 
+
+$$\mathbb{E}_{(x,y)\sim \mathcal{D}}\left[ y \cdot c(x) \right] \geq \rho$$
+
+Consecuentemente, se denota $\rho_{\mathcal{D}}(c)$ como el mayor $\rho$ para el que $c$ es característica de este tipo.
+\end{definicion}
+\begin{definicion}
+Una característica $\gamma$-robusta, que cumple ser $\rho$-útil con $\rho_{\mathcal{D}}(c)>0$ es aquella que para $\gamma>0$, si el modelo recibe un ataque adversario (bajo una perturbación $\Delta$), entonces $c$ es $\gamma$-útil. En otras palabras,
+
+$$\mathbb{E}_{(x,y)\sim \mathcal{D}} \left[ \inf_{\delta \in \Delta(x)} y \cdot c(x+\delta) \right] \geq \gamma$$
+\end{definicion}
+
+Una característica será $\rho$-útil no robusta cuando no cumpla la anterior definición para cierto $\gamma \geq 0$. En consecuencia, una característica $\gamma$-robusta es $\rho$-robusta, pero el recíproco no es cierto (puede ser $\rho$-útil y no ser robusta).
+
+Dadas las definiciones anteriores, y teniendo en cuenta el concepto de entrenamiento adversario (dada cierta perturbación $\delta$), se presenta el marco teórico desarrollado por los autores en Ilyas et al.~\cite{NoRobustFeatures}, donde también se pueden encontrar los resultados de una serie de experimentos realizados previo desarrollo de la teoría para poder proceder, de forma segura, con el framework presentado a continuación.
+
+El tema central del estudio teórico será el problema de clasificación de máxima verosimilitud entre dos distribuciones gaussianas. En particular, dada la muestra $(x,y) \in \mathcal{D}$ tal que
+
+$$y \sim \{-1,1\} \text{ uniformemente, y } x \sim \mathcal{N}(y \cdot \mu,\Sigma)$$
+
+El objetivo será aprender los parámetros $\Theta_*=(\mu_*,\Sigma_*)$ tales que cumplan
+
+$$\Theta_* = \arg \min_{\mu_*,\Sigma_*} \mathbb{E}_{(x,y)\sim \mathcal{D}} \left[ l(x;y\cdot \mu_*,\Sigma_*) \right]$$
+
+siendo $l$ la función de verosimilitud negativa de la gaussiana. La clasificación bajo el modelo se hará usando el test de verosimilitud: dado un ejemplo sin etiqueta $x$, se predice $y$ como
+
+$$y= \arg \max_{y} l(x;y \cdot \mu_*,\Sigma_*)=sgn(x^{t}\Sigma_*^{-1}\mu_*)$$
+
+En el caso de un entrenamiento adversario, esto sería
+
+$$\Theta_r = \arg \min_{\mu_*,\Sigma_*} \mathbb{E}_{(x,y) \sim \mathcal{D}} \left[ \max_{\|\delta \|_2} l(x+\delta,y \cdot \mu_*,\Sigma_*) \right]$$
+
+Los autores proponen tres teoremas con los cuales quieren mostrar la existencia de vulnerabilidad inherente en los conjuntos de datos debido a la presencia de características no robustas, haciendo que el modelo pueda aprender mal. En el presente escrito solo se enunciarán los teoremas necesarios y se demostrarán los teoremas centrales, partiendo con el teorema de Danskin (Danskin et al.~\cite{DanskinTeoremaMaxMin}).
+
+\begin{teorema} \label{tDanskin}
+Sea $\phi(x,z): \mathbb{R} \times Z \to \mathbb{R}$ una función continua, con $Z \subset \mathbb{R}^n$ un compacto. Sea $g(x)=\max_{z \in Z} \phi(x,z)$. Entonces, para todo $z \in Z$, $\phi(x,z)$ es convexo y diferenciable en $x$, siendo $\frac{\partial \phi}{\partial x}$ continua. Además, el subdiferencial de $g(x)$ se define como
+\[
+\partial g(x) = \text{conv} \left\{ \frac{\partial \phi(x,z)}{\partial x} : z \in Z_0(x) \right\}
+\]
+
+siendo $conv(\cdot)$ la envoltura convexa, y $Z_p$ el conjunto de maximizadores dados por
+\[
+Z_0(x) = \left\{ \bar{z} : \phi(x,\bar{z}) = \max_{z \in Z} \phi(x,z) \right\}
+\]
+
+\end{teorema}
+
+Gracias al teorema anterior, los autores son capaces de hacer un desarrollo teórico para acabar probando lo que se indicó anteriormente. Se pueden dividir los resultados en:
+
+\begin{itemize}
+	\item Vulnerabilidad por la discrepancia entre métricas: Debido a la presencia de características, se puede obtener un producto interno y, en consecuencia, una métrica. Los parámetros aprendidos de la gaussiana, $\Theta_* = (\mu_*,\Sigma_*)$, inducen el producto interno $\langle x,y \rangle_{\Theta} = (x-y)^{t} \Sigma^{-1} (x-y)$, de donde se puede obtener la distancia de Mahalanobis, que representa cómo el cambio en la entrada afecta a la forma de aprender características del modelo. Teniendo en cuenta la norma $l_2$, se muestra en el teorema de vulnerabilidad adversaria respecto la discrepancia cómo la vulnerabilidad adversaria aumenta conforme más aumenta la discrepancia entre la distancia de la norma $l_2$ y la distancia de Mahalanobis.
+\begin{teorema}
+Sea un ataque adversario cuya perturbación viene dada por la forma de pérdida Lagrangiana, que es 
+$$\max_{\delta} l(x+\delta,y \cdot \mu_* \Sigma_*) -C \cdot \|\delta \|_2$$
+con $C \geq \frac{1}{\lambda_{min}(\Sigma)}$, $\lambda_{min}$ el menor valor propio, una constante que asegura que el problema sea cóncavo. Entonces, la pérdida adversaria, $\mathcal{L}_{\text{adv}}$ del modelo no robusto $(\mu_*,\Sigma_*)$, es dado por
+$$\mathcal{L}_{\text{adv}}(\Theta) - \mathcal{L}(\Theta) = \text{tr} \left[ \left( I_n + (C \cdot \Sigma - I_n)^{-1} \right)^2 \right] - n$$
+
+y, si se fija $\text{tr}(\Sigma)=k$, lo anterior se minimiza si $\Sigma = \frac{k}{n}I_n$.
+\end{teorema}
+\begin{proof}
+Para empezar, se muestra el problema debilitado desarrollando la veosimilitud negativa gaussiana:
+
+\begin{align*}
+\mathcal{L}_{\text{adv}} (\Theta)-\mathcal{L}(\Theta) &= \mathbb{E}_{x \sim \mathcal{N}(\mu,\Sigma)} \left[ 2 \cdot v^{t} (C \cdot \Sigma_* - I_n)^{-t}\Sigma_*^{-1}v \right. \\
+&\quad \left. + v^{t}(C \cdot \Sigma_* - I_n)^{-t}\Sigma_*^{-1}(C \cdot \Sigma_* - I_n)^{-1}v \right] \\
+&= \mathbb{E}_{x \sim \mathcal{N}(\mu,\Sigma)} \left[ 2 \cdot v^{t} (C \cdot \Sigma_* \Sigma_*
+ - \Sigma_*)^{-1}v \right. \\
+&\quad \left. +v^{t}(C \cdot \Sigma_* - I_n)^{-t} \Sigma_*^{-1}(C \cdot \Sigma_* - I_n)^{-1}v \right]
+\end{align*}
+
+Recuérdese que se considera la vulnerabilidad según los parámetros obtenidos con la estimación máximo verosimilitud $\mu$ y $\Sigma$:
+
+\begin{align*}
+\mathcal{L}_{\text{adv}}(\Theta)-\mathcal{L}(\Theta) &= \mathbb{E}_{v \sim \mathcal{N}(0,I_n)} \left[ 2 \cdot v^{t} \Sigma^{\frac{1}{2}} (C \cdot \Sigma^2 - \Sigma)^{-1} \Sigma^{\frac{1}{2}}v \right. \\
+&\quad \left. + v^{t} \Sigma^{\frac{1}{2}}(C \cdot \Sigma - I_n)^{-t} \Sigma^{-1}(C \cdot \Sigma - I_n)^{-1} \Sigma^{\frac{1}{2}}v \right] \\
+&= \mathbb{E}_{v \sim \mathcal{N}(0,I_n)} \left[ 2 \cdot v^{t} (C \cdot \Sigma - I_n)^{-1}v + v^{t} \Sigma^{\frac{1}{2}}(C^2 \cdot \Sigma^3 - 2 \cdot C \cdot \Sigma^2 + \Sigma)^{-1} \Sigma^{\frac{1}{2}}v \right] \\
+&= \mathbb{E}_{v \sim \mathcal{N}(0,I_n)} \left[ 2 \cdot v^{t}(C \cdot \Sigma - I_n)^{-1}v + v^{t} (C \cdot \Sigma - I_n)^{-2}v \right] \\
+&= \mathbb{E}_{v \sim \mathcal{N}(0,I_n)} \left[ - ||v||_2^2 + v^{t}I_n v + 2 \cdot v^{t} (C \cdot \Sigma - I_n)^{-1} v + v^{t} (C \cdot \Sigma - I_n)^{-2}v \right] \\
+&=\mathbb{E}_{v \sim \mathcal{N}(0,I_n)} \left[ -||v||_2^2 + v^{t}(I_n + (C \cdot \Sigma - I_n)^{-1})^2 v \right] \\
+&=\text{tr} \left[ \left( I_n + (C \cdot \Sigma - I_n)^{-1} \right)^2 \right] - n
+\end{align*}
+
+Se acaba de probar la primera parte del teorema. Ahora, sea $k=\text{tr}(\Sigma)$, veamos que el riesgo adversario es minimizado por $\Sigma = \frac{k}{n} I_n$:
+
+$$\min_{\Sigma} \mathcal{L}_{\text{adv}}(\Theta) - \mathcal{L}(\Theta) = \min_{\Sigma} \text{tr} \left[ \left( I_n+(C \cdot \Sigma - I_n)^{-1} \right)^2 \right] = \min_{{\lambda_i}} \sum_{i=1}^{n} \left( 1+\frac{1}{C \cdot \lambda_i - 1} \right)^2$$
+
+con $\{\lambda_i\}_{i=1}^n$ los valores propios de $\Sigma$. Supóngase que $\sum_{i=1}^n \lambda_i = k$, por lo que en condiciones óptimas $\Sigma$ minimiza lo anterior si $\nabla_{\{\lambda_i\}} \alpha 1$, es decir, si $\nabla_{\lambda_i}=\nabla_{\lambda_j}$ para todo $i$,$j$. Ahora,
+
+$$\nabla_{\lambda_i} = -2 \cdot \left( 1+\frac{1}{C \cdot \lambda_i - 1}\right) \cdot \frac{C}{(C \cdot \lambda_i -1)^2}=-2 \cdot \frac{C^2 \lambda_i}{(C \cdot \lambda_i -1)^3}$$
+
+Si se resuelve, se encuentra lo siguiente
+
+$$-2 \cdot \frac{C^2 \cdot \lambda_i}{(C \cdot \lambda_i - 1)^3} = -2 \cdot \frac{C^2 \lambda_j}{(C \cdot \lambda_j - 1)^3}$$
+
+que es cierto, resolviendo en $\mathbb{R}$, si $\lambda_i = \lambda_j$. Entonces, $\Sigma \alpha I_n$. Haciendo las transformaciones necesarias para satisfacer las restricciones, se concluye que $\Sigma=\frac{k}{n} I_n$.
+\end{proof}
+	\item Aprendizaje robusto: El óptimo no robusto en la estimación máximo verosímil es $\Theta_* = \Theta$, y la estimación estándar depende de la distribución de los datos reales. El siguiente teorema caracteriza el comportamiento de parámetros aprendidos en un problema robusto, que se probará con el apoyo de varios resultados auxiliares presentes en Ilyas et al.~\cite{NoRobustFeatures}.
+	
+\begin{teorema} (Parámetros aprendidos de forma robusta)
+Como en el caso no robusto, $\mu_r = \mu$. Para la matriz de covarianzas $\Sigma_r$, existe $\epsilon_0 > 0$ tal que para todo $\epsilon \in [0,\epsilon_0)$
+
+$$\Sigma_r = \frac{1}{2} \Sigma + \frac{1}{\lambda} I_n + \sqrt{\frac{1}{\lambda} \Sigma + \frac{1}{4} \Sigma^2} \text{ con } \Omega \left( \frac{1+\sqrt{\epsilon}}{\sqrt{\epsilon}+\epsilon \sqrt{\epsilon}} \right) \leq \lambda \leq O \left( \frac{1+\sqrt{\epsilon}}{\sqrt{\epsilon}} \right)$$
+
+donde las notaciones $O$ y $\Omega$ son las respectivas al estudio de eficiencia de algoritmos.
+\end{teorema}	
+
+\begin{proof}
+Se va a probar primero, para el caso robusto, que $\mu_*=\mu$.
+De la aplicación del teorema de Danskin (teorema \ref{tDanskin}), se acaba obteniendo la expresión del gradiente de $l$ con respecto cierto $T=\Sigma^{-1}$ y $m=\Sigma^{-1} \mu_*$ como
+
+$$0 = \nabla_{\begin{bmatrix}
+    T \\
+    m
+\end{bmatrix}} l = \begin{bmatrix}
+    \frac{1}{2}A \Sigma - \frac{1}{2} T^{-1} \\
+    A T^{-1}m - A \mu
+\end{bmatrix}$$
+donde $A=(I_n+M)^2$ y $M=(\lambda \Sigma_* - I_n)^{-1}$, expresiones usadas por los autores en la demostración de un lema del artículo, siendo $\lambda$ una constante tal que $M \in \mathcal{M} = \{M \in \mathbb{R}^{n \times n} : M_{i,j}=0 \forall i \neq j, \mathbb{E}_{x \sim \mathcal{N}}(\mu,\Sigma) \left[ \|M \cdot v \|_2^2 \right] = \epsilon^2 \}$.
+La anterior expresión se puede reescribir como
+
+$$0=\nabla_{\begin{bmatrix}
+    T \\
+    m
+\end{bmatrix}} l = \begin{bmatrix}
+\frac{1}{2}(I_n + M)^2 \Sigma - \frac{1}{2} \Sigma_* \\
+(I_n + M)^2 \mu_* - (I+M)^2 \mu
+\end{bmatrix}
+$$
+
+Como ambos elementos son independientes, se puede resolver. Con esto, se muestra que en el caso robusto, se da $\mu_* = \mu$, y $\Sigma^{-1} = \Sigma_*^{-1} (M+I_n)^2$.
+
+Ahora, sea $\epsilon_0>0$ el de la hipótesis, es decir, el mayor $\epsilon$ tal que el conjunto $\{\lambda: \text{tr}(\Sigma^2 M) = \epsilon, \lambda \geq \frac{1}{\lambda_{\text{max}}(\Sigma_*)}\}$ tiene un solo elemento. Los autores discuten porqué $\epsilon_0$ debe existir.
+
+Antes de continuar, se establecen cotas para $\lambda$, mediante el uso de la desigualdad de Cauchy-Schwarz y la desigualdad de la media aritmética y media armónica.
+
+\begin{align*}
+\epsilon &= \text{tr}(\Sigma M^2) \geq \lambda_{\text{min}}(\Sigma) \text{tr}(M^2) \geq \frac{\lambda_{\text{min}}(\Sigma)}{n} \text{tr}(M)^2 \\
+&\geq \frac{\lambda_{\text{min}}(\Sigma)}{n} \left[ \text{tr} \left( (\lambda \Sigma_* - I_n)^{-1} \right) \right]^2 \geq \frac{\lambda_{\text{min}}(\Sigma)}{n} \left[ \text{tr}(\lambda \Sigma_* - I_n)^{-1} \cdot n^2 \right]^2 \\
+&\geq n^3 \cdot \lambda_{\text{min}}(\Sigma) \cdot [\lambda \cdot \text{tr}(\Sigma_*) - n]^{-2}
+\end{align*}
+
+Despejando, se tiene
+
+\begin{align*}
+[\lambda \cdot \text{tr}(\Sigma_*) - n]^2 \geq \frac{n^3 \cdot \lambda_{\text{min}}(\Sigma)}{\epsilon} \\
+\lambda \cdot \text{tr}(\Sigma_*)-n \geq \frac{n^{\frac{3}{2}} \cdot \sqrt{\lambda_{\text{min}}(\Sigma)}}{\sqrt{\epsilon}} \\
+\lambda \geq \frac{n}{\text{tr}(\Sigma_*)} \left( 1 + \sqrt{\frac{n \cdot \lambda_{\text{min}}(\Sigma)}{\epsilon}} \right)
+\end{align*}
+
+Por otro lado, la cota superior es
+
+\begin{align*}
+\epsilon = \text{tr}(\Sigma M^2) \leq \|\Sigma \|_F \cdot n \cdot \lambda_{\text{max}}(M)^2 \leq \|\Sigma \|_F \cdot n \cdot \lambda_{\text{min}}(M)^{-2}
+\end{align*}
+y despejando, se obtiene
+\begin{align*}
+\lambda \cdot \lambda_{\text{min}}(\Sigma_*) - 1 \leq \sqrt{\frac{\|\Sigma \|_F \cdot n}{\epsilon}} \\
+\lambda \leq \frac{1}{\lambda_{\text{min}}(\Sigma_*)} \left( \sqrt{\frac{\|\Sigma \|_F \cdot n}{\epsilon}} + 1 \right)
+\end{align*}
+
+donde $||\cdot||_F$ es la norma de Frobenius o norma de Hilbert-Schmidt, esto es, 
+$$\|A \|_F = \sqrt{\sum_{i=1}^m \sum_{j=1}^n |a_{i,j}|^2}$$
+con $A$ una matriz $m \times n$.
+
+Ya obtenidas las cotas, se continua con la cota inferior
+
+$$\lambda \geq \frac{n}{\text{tr}(\Sigma_*)} \left( 1 + \sqrt{\frac{n \cdot \lambda_{\text{min}}(\Sigma)}{\epsilon}} \right)$$
+
+y se procede a usar la expresión de $\Sigma^{-1}$ antes obtenida, para eliminar la presencia de $\lambda$ en $\Sigma_*$:
+
+$$\Sigma_* = \Sigma (M+I_n)^2 $$
+$$\text{tr}(\Sigma_*) = \text{tr} \left[ (\Sigma^{\frac{1}{2}} M + \Sigma^{\frac{1}{2}})^2 \right] \leq 2 \cdot \text{tr} \left[ (\Sigma^{\frac{1}{2}} M)^2 + (\Sigma^{\frac{1}{2}})^2 \right] \leq 2 \cdot (\epsilon + \text{tr}(\Sigma))$$
+
+Aplicando la cota inferior, se obtiene
+
+$$\lambda \geq \frac{\frac{n}{2}}{\epsilon + \text{tr}(\Sigma)} \left( 1 + \sqrt{\frac{n \cdot \lambda_{\text{min}}(\Sigma}{\epsilon}} \right)$$
+
+Sin embargo, si $\epsilon = n \cdot \lambda_{\text{min}}(\Sigma) \epsilon' \leq \text{tr}(\Sigma) \epsilon'$, es decir, se reescala en $(0,\epsilon_0)$, se reescribe como
+
+$$\lambda \geq \frac{\frac{n}{2}}{(1+\epsilon')\text{tr}(\Sigma)} \left( 1 + \frac{1}{\sqrt{\epsilon'}} \right) \geq \frac{n (1+\sqrt{\epsilon'})}{2 \sqrt{\epsilon'}(1+\epsilon')\text{tr}(\Sigma)}$$
+
+Para reescribir la cota superior de $\lambda$ se sigue la misma metodología. Con la expresión de $\Sigma^{-1}$, y por ser $M$ semidefinida positiva, ocurre $\lambda_{\text{min}}(\Sigma_*) \geq \lambda_{\text{min}}(\Sigma)$. Si se sustituye $\epsilon = n \cdot \lambda_{\text{min}}(\Sigma) \epsilon'$, se puede reescribir como
+
+$$\lambda \leq \frac{1}{\lambda_{\text{min}}(\Sigma)} \left( \sqrt{\frac{||\Sigma||_F}{\lambda_{\text{min}}(\Sigma)\epsilon'}} + 1 \right) = \frac{\|\Sigma \|_F + \sqrt{\epsilon \cdot \lambda_{\text{min}}(\Sigma)}}{\lambda_{\text{min}}(\Sigma)^{\frac{3}{2}} \sqrt{\epsilon}}$$
+
+Finalmente, tal y como prueban los autores, al cumplirse para un problema minimax que
+$$\Sigma_* = \frac{1}{\lambda} I_n + \frac{1}{2} \Sigma + \sqrt{\frac{1}{\lambda} \Sigma + \frac{1}{4} \Sigma^2}$$
+
+se termina obteniendo lo que se quería probar.
+\end{proof}
+
+	\item Interpretabilidad del gradiente: Los modelos robustos tienen gradientes con mayor significado. El modelo creado por los autores tiene un comportamiento consecuente del teorema anterior. En particular, se muestra que los parámetros aprendidos de forma robusta hacen que el gradiente del clasificador lineal y el vector que relaciona las medias de ambas distribuciones se establezca de mejor manera bajo el producto interno $l_2$.
+	
+\begin{teorema} (Ajuste del gradiente) \label{teom215}
+Sean $f(x)$ y $f_r(x)$ clasificadores monótonos basados en separadores lineales inducidos por clasificación estándar y la dada por la clasificación máximo verosímil, respectivamente. El ángulo máximo formado entre el gradiente del clasificador y el vector que conecta con las clases es menor al ángulo del gradiente del modelo robusto
+
+$$\min_{\mu_*} \frac{ \langle \mu_*,\triangledown_x f_r(x) \rangle}{\|\mu_* \| \cdot \|\triangledown_x f_r(x) \|} > \min_{\mu_*} \frac{\langle \mu_*,\triangledown_x f(x) \rangle}{\|\mu_* \| \cdot \|\triangledown_x f(x) \|}$$
+\end{teorema}
+
+La demostración del teorema se realizará con los siguientes lemas.
+
+\begin{lema}
+Si $A$ y $B$ son matrices definidas positivas, con números de condición dados por $\mathbf{k}$, cumplen $\mathbf{k}(A) > \mathbf{k}(B)$, entonces $\mathbf{k}(A+B) \leq \max\{\mathbf{k}(A),\mathbf{k}(B)\}$
+\end{lema}
+\begin{proof}
+Por contrarrecíproco,
+$$\mathbf{k}(A+B) = \frac{\lambda_{\text{max}}(A) + \lambda_{\text{max}}(B)}{\lambda_{\text{min}}(A) + \lambda_{\text{min}}(B)}$$
+$$\mathbf{k}(A) = \frac{\lambda_{\text{max}}(A)}{\lambda_{\text{min}}(A)}$$
+$$\mathbf{k}(A) \geq \mathbf{k}(A+B)$$
+$$\lambda_{\text{max}}(A) (\lambda_{\text{min}}(A) + \lambda_{\text{min}}(B)) \geq \lambda_{\text{min}}(A) (\lambda_{\text{max}}(A) + \lambda_{\text{max}}(B))$$
+$$\lambda_{\text{max}}(A) \lambda_{\text{min}}(B) \geq \lambda_{\text{min}}(A) \lambda_{\text{max}}(B)$$
+$$\frac{\lambda_{\text{max}}(A)}{\lambda_{\text{min}}(A)} \geq \frac{\lambda_{\text{max}}(B)}{\lambda_{\text{min}}(B)}$$
+\end{proof}
+
+\begin{lema}
+Para toda matriz definida positiva $A$ y $k>0$, se tiene
+$$\mathbf{k}(A + k \cdot I_n) < \mathbf{k}(A)$$
+$$\mathbf{k}(A + k \cdot \sqrt{A}) \leq \mathbf{k}(A)$$
+\end{lema}
+
+\begin{lema} \label{lem214}
+Para una matriz definida positiva, $A>0$, con un número de condición asociado, se tiene
+$$\min_{x} \frac{x^{t} A x}{\|A x \|_2 \cdot \|x \|_2} = \frac{2 \sqrt{\mathbf{k}(A)}}{1+\mathbf{k}(A)}$$
+\end{lema}
+
+\begin{proof} (Teorema \ref{teom215})
+Primero se ve $\mathbf{k}(\Sigma_*) \leq \mathbf{k}(\Sigma)$:
+\begin{align*}
+\mathbf{k}(\Sigma_*) &= \mathbf{k} \left( \frac{1}{\lambda} I_n + \frac{1}{2} \Sigma + \sqrt{\frac{1}{\lambda} \Sigma + \frac{1}{4} \Sigma^2} \right) \\
+&< \max \left\{ \mathbf{k} \left( \frac{1}{\lambda} I_n + \frac{1}{2} \Sigma \right), \mathbf{k} \left( \sqrt{\frac{1}{\lambda} \Sigma + \frac{1}{4} \Sigma^2} \right) \right\} \\
+&< \max \left\{ \mathbf{k}(\Sigma),\sqrt{\mathbf{k} \left( \frac{1}{\lambda} \Sigma + \frac{1}{4} \Sigma^2 \right)} \right\} \\
+&= \max \left\{ \mathbf{k}(\Sigma) ,\sqrt{\mathbf{k} \left( \frac{2}{\lambda} \sqrt{\frac{1}{4} \Sigma^2} + \frac{1}{4} \Sigma^2 \right)} \right\} \\
+&\leq \mathbf{k}(\Sigma)
+\end{align*}
+
+Como la expresión en el lema \ref{lem214} es estrictamente decreciente en $\mathbf{k}$, se acaba probando el teorema.
+
+\end{proof}
+
+\end{itemize}
+
+% AHORA VULNERABILIDADES DEL MODELO
+\newpage
+\section{Propiedades del modelo}
+Se han expuesto algunos de los resultados teóricos más relevantes en lo que respecta a las vulnerabilidades de las redes neuronales profundas desde el punto de vista de los datos. Sin embargo, cabe mencionar la existencia de más estudios con resultados robustos con respecto al tema, además de otros estudios experimentales donde se defiende la tesis de debilidad de redes con respecto a datos. Por ejemplo, para las imágenes se tiene lo desarrollado en Wang et al.~\cite{ImageProp}, y para problemas de clasificación más generales, se ha defendido experimentalmente que en el subespacio de datos puede haber patrones anormales que lleven a la existencia de ejemplos adversario, expuesto en Cohen et al.\cite{AbPatternSubspace}, o estudios que atacan directamente a la propia superficie sobre la que se distribuyen los datos, como en Szegedy et al.\cite{DataManifold}. Especificando en las propiedades de las características, otros investigadores defienden que la presencia de ejemplos adversario también se debería a patrones anormales, no solo en la superficie de los datos, sino en la propia característica, expuesto en Xie at al.~\cite{AbnorPatterns}.
+
+A continuación se expondrán los resultados obtenidos que sustentan la existencia de vulnerabilidades en el modelo según ciertas situaciones, o apoyándose en propiedades de funciones como la de activación. También se ataca a la forma de entrenar a la red, teniendo en cuenta a la función coste (también llamada función pérdida), resultados que serán desarrollados, aunque otras investigaciones como las desarrolladas en Ross et al.\cite{BatchReg} se centran en la normalización del batch y la regularización del gradiente. Otros resultados se centran en la geometría de la superficie de decisión, en particular en los límites de esta. Desarrollos como en Tramèr et al.\cite{Simil} sugieren que el problema se encuentra en la similitud entre los límites de decisión, y otros como Fawzi et al.\cite{CURVATURE} tratan sobre la influencia de la curvatura en los límites de decisión en la existencia de vulnerabilidad del modelo. Por último, ya en estudios experimentales se trata la existencia de debilidades por la activación de neuronas críticas (Tao et al.\cite{Criticneur}) o la distribución de salida de las neuronas escondidas (Zheng et al.\cite{HiddenNeur}), culpando al comportamiento del modelo.
+
+%\subsection{Hipótesis de linealidad}
+%Ataque
+%Ian J Goodfellow, Jonathon Shlens, and Christian Szegedy. 2014. %Explaining and harnessing adversarial examples. arXiv preprint arXiv:1412.6572 (2014).
+
+\subsection{Función de activación: ReLU}
+%Amit Daniely and Hadas Schacham. 2020. Most ReLU Networks Sufer from .. 2 Adversarial Perturbations. arXiv preprint arXiv:2010.14927 (2020).
+Tal y como se mencionó anteriormente, ciertos autores defienden que una de las causas de la existencia de ejemplos adversario es el uso de ciertas funciones de activación de neuronas. A continuación, se hará un desarrollo completo de las ideas desarrolladas en Amit et al.\cite{FActivation}, donde la función de activación considerada, $\sigma$, es la función ReLU. Mientras en otros trabajos, tales como Bubeck et al.\cite{Partic}, se defiende que, al particionar la bola o el cubo, hay clasificadores sin ejemplos adversario, a continuación se defiende que todas las redes neuronales con ReLU como función de activación tienen ejemplos adversario, ignorando el resto de propiedades de la red.
+
+Para hacer un desarrollo cómodo de los resultados, se introducen ciertos preliminares, tales como una definición de red neuronal completamente conectada en función de la ReLU y los pesos. Esto es, considérese un vector de pesos \(W=(W_1, \ldots, W_{t-1}, W_t)\) con \(1 \leq j \leq t\), donde \(W_j\) es una matriz \(n_{j+1} \times n_j\) y \(n_j\) es la dimensión de la entrada de la capa \(j\) con vector de pesos \(W_j\), teniendo \(n=n_1\) la dimensión de los datos de entrada a la red y \(n_{t+1}\) la de salida, que se supone vale 1. La red, con vector de pesos \(W\), se escribe
+\[
+f_{W}(x) = (W_t \circ \sigma \circ W_{t-1} \circ \ldots \circ \sigma \circ W_{1})(x)
+\]
+
+Además, se escribe como $f_{W_1,...,W_i}(x)$ a la salida de la capa i-ésima previa aplicación de $\sigma$, y a lo anterior compuesto por $\sigma$ cuando se aplique.
+
+Por otro lado, los pesos siguen una distribución aleatoria. Una matriz de pesos aleatorios es una matriz $k \times n$ cuyos elementos son independientes e idénticamente distribuidos por una gaussiana centrada, esto es, cada elemento de $W$ antes expuesto. Se dirá que una matriz de pesos aleatorios $k \times n$ está normalizada si su varianza según la distribución gaussiana es $\frac{1}{n}$.
+
+Para acabar los preliminares, dadas una función $f: \mathbb{R}^n \to \mathbb{R}$ y un punto $x_0 \in \mathbb{R}^n$, el flujo del gradiente empezando en $x_0$ es la curva $\gamma(t)$ tal que $\gamma(0)=x_0$ y $\gamma'(t) = - \nabla f(\gamma(t))$. Nótese que, si se discretiza, se tiene el método de gradiente descendiente, cuyas curvas tienden a ser iguales en torno a $0$. Volviendo a los ejemplos adversarios, dado el vector $W$ y un ejemplo $x_0 \in \mathbb{R}^n$, las perturbaciones adversarias se pueden buscar alterando el flujo del gradiente según la función $x \mapsto y f_{W}(x)$, donde $y=sgn(f_{W}(x_0))$.
+
+Se procede a exponer los resultados expuestos por los autores en Amit et al.\cite{FActivation}. Para $x \in \mathbb{R}^n$ y $r > 0$, la bola cerrada de centro $x$ y radio $r$ se escribe $\bar{B}(x,r)$. Un $\epsilon$-recubrimiento de $A \subset \mathbb{R}^n$, $S \subset A$, es aquel que para todo $x \in A$, existe $y \in S$ tal que $\|x-y \| < \epsilon$. Dicho esto, se usan los dos siguientes teoremas sobre matrices aleatorias gaussianas como apoyo:
+
+\begin{teorema} \label{teom216}
+Sea $W$ una matriz $d \times m$ aleatoria cuyos elementos son independientes e idénticamente distribuidos según una gaussiana de media $0$ y varianza $\frac{1}{n}$. Para todo $t>0$, y con probabilidad al menos $1-2 \exp \left(  - \frac{d t^2}{2}\right)$, se cumple
+$$\frac{\sqrt{m}-\sqrt{d}}{\sqrt{n}} - t \leq s_{\text{min}}(W) \leq s_{\text{max}}(W) \leq \frac{\sqrt{m}+\sqrt{d}}{\sqrt{n}} + t$$
+\end{teorema}
+
+El siguiente teorema para conjuntos convexos también se usará:
+
+\begin{teorema}
+Sea $C \subset \mathbb{R}^n$ un conjunto cerrado y convexo, y sea $x \in \mathbb{R}^n - C$ elemento en el exterior de $C$. Entonces existe un vector $u \in \mathbb{S}^{n-1}$ tal que $\sup_{y \in C} u^{t}y < u^{t}x$.
+\end{teorema}
+
+Se está en condiciones entonces de probar los resultados referentes a la existencia de ejemplos adversarios por el uso de la ReLU como función de activación.
+
+Primero se muestran resultados importantes para el tratamiento con matrices aleatorias. El siguiente resultado es para redes neuronales cuya dimensión decrece conforme se avanza por capa. Los autores usan la notación O-grande para las dimensiones de entrada.
+
+\begin{teorema} \label{teom218}
+Supóngase que para todo $1 \leq j \leq t$, $n_{j+1}=o(n_j)$ y $n_t = \omega(1)$. Sea $x_0 \in \mathbb{R}^n - \{0\}$ y sea $W$ pesos aleatorios. Entonces, con probabilidad $1-o(1)$, el flujo del gradiente de longitud $\tilde{O} \left( \frac{\|x_0 \|}{\sqrt{n}} \right)$ con origen en $x_0$ cambiará el signo de la salida de la red.
+\end{teorema}
+
+La demostración desde cero del teorema es bastante complicada, por lo que continuarán discutiendo otros resultados con los cuales se podrá probar el teorema con una dificultad bastante menor. Sí es cierto que una de las consecuencias del teorema es el siguiente, que particulariza  para cierta distribución sobre $\mathbb{R}^n$.
+
+\begin{corolario}
+Supóngase para $1 \leq j \leq t$, que $n_{j+1} = o(n_j)$ y $n_t = \omega (ln(n))$. Tómese la distribución $\mathcal{D}$ sobre $\mathbb{R}^n$ y sea $W$ pesos aleatorios. Entonces, con probabilidad $1-o(1)$ sobre la elección de $W$, se cumple que si $x_o \sim \mathcal{D}$, entonces con probabilidad $1-p(1)$ sobre la elección de $x_0$ el flujo del gradiente de longitud $\tilde{O} \left( \frac{\|x_0 \|}{\sqrt{n}} \right)$ con origen $x_0$ cambiará el signo de la salida de la red.
+\end{corolario}
+
+Para probar el teorema \ref{teom218}, es necesario introducir el concepto de matrices $c$-sobreyectivas para cierto $c>0$ constante, y se introduce la notación $\mathbb{B}^n = \bar{B}(0,1)$ para la bola unidad en $\mathbb{R}^n$, haciendo énfasis en la dimensión de la bola.
+
+\begin{definicion}[Matriz $c$-sobreyectiva]
+Para $c>0$ constante. se dice que la matriz $W$, que es $k \times n$, es $c$-sobreyectiva si $c \mathbb{B}^k \subset W \mathbb{B}^n$. Si $W$ está normalizada, entonces $W$ es $\Omega(1)$-sobreyectiva.
+\end{definicion}
+
+Sin embargo, se hará uso de un concepto de un concepto más fuerte.
+
+\begin{definicion}[Matriz $(c_1,c_2)$-sobteyectiva]
+Para $c_1$,$c_2 > 0$, se dirá que $W$ es $(c_1,c_2)$-sobreyectiva si para cualquier matriz con $c_1 d$ o más columnas de $W$ es $c_2$-sobreyectiva.
+\end{definicion}
+
+El siguiente resultado mostrará que si $k=o(n)$ y $W$ es una matriz de pesos aleatorios, entonces para cualquier $c_1>0$, $W$ es $(c_1,\Omega(1))$-sobreyectiva.
+
+\begin{teorema} \label{teom219}
+Para cualquier $c_1 \in (0,1)$ existen constantes $c_2$,$c_3>0$ que dependen solo de $c_1$, y que cumplen que si $W$ es una matriz de pesos $k \times n$ aleatorios normalizada con $k \leq c_3 d$, entonces con probabilidad $1-2^{-\Omega(n)}$, $W$ es $(c_1,c_2)$-sobreyectiva.
+\end{teorema}
+
+Los autores se apoyan en los siguientes resultados para la demostración del teorema \ref{teom219}.
+
+\begin{lema} \label{lem215}
+Sea $c_1 \in (0,1)$. Entonces existe una constante positiva $c_2'$, dependiente de $c_1$ ($c_2'=c_2'(c_1)$) para la que si $W$ es una matriz de pesos aleatorios $k \times n$, y se toma $y \in \mathbb{S}^{k-1}$, con probabilidad $1-2^{-\Omega(n)}$, para cada conjunto $A$ de medida, al menos $c_1 d$, existe un vector $x \in \mathbb{S}^{n-1}$ tal que $y^{t} W^Ax \geq c_2'$ ($W^A$ es, con $A \subset \{1,...,n\}$, la matriz obtenida de $W$ que pone a cero todos los elementos $\omega_{i,j}$ con $j \notin A$).
+\end{lema}
+
+\begin{lema}
+Sea $c_1>0$. Entonces existe $c_2>0$ para la que si $X_1,...,X_d$ son variables aleatorias independientes e idénticamente distribuidas según una gaussiana estándar, si $Z$ es la suma de los $\text{E}(c_1 n)$ elementos más pequeños de $X_1^2,...,X_n^2$, se cumple que la probabilidad de que $Z$ sea mayor a $c_2 d$ es $1-2^{-\Omega(n)}$.
+\end{lema}
+
+De estos resultados se desprende el siguiente corolario, que se usará en la demostración del teorema.
+
+\begin{corolario} \label{coro210}
+Para $c_1 \in (0,1)$ y $c_2'=c_2'(c_1)$ la del lema \ref{lem215} , se toma $S$ un $\frac{c_2'}{7}$-recubrimiento de $\mathbb{S}^{k-1}$ de tamaño $2^{O(k)}$. Entonces existe $c_3=c_3(c_1)$ para el que si $W$ es una matriz de pesos aleatorios $k \times n$ con $k \leq c_3 d$, con probabilidad $1-2^{-\Omega(n)}$, para cada conjunto $A$ de tamaño, al menos, $c_1 n$,$y \in S$, existe un vector $x \in \mathbb{S}^{n-1}$ tal que $y^{t} W^A x \geq c_2'$.
+\end{corolario}
+
+\begin{lema} \label{lem217}
+Sea $S$ un $\frac{c_2'}{7}$-recubrimiento de $\mathbb{S}^{k-1}$ y sea $C \subset \mathbb{R}^k$ un cerrado y convexo tal que:
+\begin{itemize}
+	\item Para todo $y \in S$ existe $x \in C$ tal que $y^{t} x \geq c_2'$.
+	\item $C \subset B(0,3)$.
+\end{itemize}
+
+Entonces $C$ contiene a la bola centrada en $0$ de radio $\frac{c'_2}{2}$.
+
+\end{lema}
+
+Las demostraciones de los resultados previos aparecen en Amit et al.\cite{FActivation}. Por tanto, se está en condiciones de probar el teorema \ref{teom219}.
+
+\begin{proof}(del teorema \ref{teom219})
+Sea, para $c_1>0$, $c_2' = c_2'(c_1)$ y $c_3=c_3(c_1)$ las constantes del corolario \ref{coro210}. Sea $c_2 = \frac{c_2'}{2}$ y sea $S$ un $\frac{c_2'}{7}$-recubrimiento de $\mathbb{S}^{k-1}$. Tómese $W$ una matriz de pesos aleatorios $k \times n$, con $k \leq c_3 d$. Por el corolario \ref{coro210} y el teorema \ref{teom216}, se tiene que con probabilidad $1-2^{-\Omega(n)}$:
+
+\begin{itemize}
+	\item Para cada $A \subset \{1,...,n\}$ de tamaño, al menos, $c_1 d$, y para cada $y \in S$, existe $x \in W^A \mathbb{B}^n$ tal que $y^{t} x \geq c_2'$.
+	\item $W^A \mathbb{B}^n \subset B(0,3)$.
+\end{itemize}
+
+El lema \ref{lem217} indica que $B(0,c_2) \subset W^A \mathbb{B}^d$ y que $W^A$ es $c_2$-sobreyectiva. Al ser $A \subset \{1,...,n\}$ arbitrario con tamaño, al menos, $c_1 d$, se obtiene que $W$ es $(c_1,c_2)$-sobreyectiva. 
+
+\end{proof}
+
+Con el teorema ya probado, se dirá que los pesos $W=(W_1,...,W_{t-1},W_t)$ son $(c_1,c_2)$-típicos si, para todo $t$, la matriz $W_t$ es $(c_1,c_2)$-sobreyectiva y tiene norma espectral, como mucho, con valor $\frac{1}{c_2}$. Juntando los teoremas \ref{teom216} y \ref{teom219}, se deduce que para cualquier $c_1>0$, si $W$ son pesos aleatorios normalizados con las dimensiones del teorema \ref{teom218}, entonces son $(c_1,\Omega(1))$-tipicos. Se dirá que un ejemplo es $(c_1,c_2)$-típico si
+\begin{itemize}
+	\item En cada capa el valor de entrada de, al menos, $2 c_1$ neuronas es al menos de $\frac{\|x \| \cdot c_2}{\sqrt{n}}$.
+	\item $|f_{W}(x)| \leq \|x \| \sqrt{\frac{ln(n)}{n}}$.
+\end{itemize}
+
+Entonces, se deduce que para cualquier $c_1 < \frac{1}{4}$ y para cualquier ejemplo $x$, si $W$ son pesos aleatorios normalizados entonces, con alta probabilidad sobre la elección de $W$ el ejemplo $x$ es $(c_1,\Omega(1))$-típico según $W$.
+
+\begin{teorema} \label{teom220}
+Sean $c_1 < 1$, $c_2 > 0$ y una profundidad $t \in \{2,3,...\}$. Supóngase que $n_t=\omega(ln(n))$, que $W$ son pesos $(c_1,c_2)$-típicos y que $x_0$ es un ejemplo $(c_1,c_2)$-típico según $W$. Entonces, el flujo del gradiente de longitud $\tilde{O} \left( \frac{\|x_0 \|}{\sqrt{n}} \right)$ que empieza en $x_0$ cambiará el signo de la salida de la red.
+\end{teorema}
+
+\begin{proof}
+Sin pérdida de generalidad, asúmase que $\|x_0 \| = \sqrt{n}$. Sea $W_i^x$ una matriz obtenida por la matriz $W_i$ cambiando cada columna $j$ a cero, correspondiendo cada $j$ a la neurona apagada para el ejemplo $x$. Entonces
+$$f_{W}(x) = W_t^x \cdot W_{t-1}^x \cdot ... \cdot W_1^x x$$
+con gradiente en $x$ de valor $W_t^x \cdot ... \cdot W_1^x$.
+
+Fíjese $x \in B(x_0,c_2^{-t} \sqrt{ln(n)})$. Como cada capa calcula una función con constante de Lipschitz $O(1)$ por ser la norma espectral de las matriz de pesos de valor $O(1)$, y como hay $O(1)$ capas, la norma del vector de entrada para cada capa cambia a razón de, como mucho, $O(\sqrt{(n)})$ yendo de $x_0$ a $x$. En particular, como mucho $O(ln(n))$ neuronas con valor de entrada mayor igual a $c_2$ para $x_0$, pasan a desactivarse cuando se va a $x$. Entonces, el número de neuronas activas según $x$ en la capa $i$ es al menos de $2 c_1 d_i - O(ln(n))$, que si $n_t = \omega(ln(n))$, entonces es mayor a $c_1 n_i$.
+
+Como las matrices de pesos son $(c_1,c_2)$-sobreyectivas, se tiene que $W_i^x$ es $c_2$-sobreyectiva para $x \in B(x_0,c_2^{-t} \sqrt{ln(n)})$. La composición de matrices $c_2$-sobreyectivas es $c_2^{t}$ sobreyectiva, por lo que el gradiente $W_t^x \cdot W_{t-1}^x \cdot ... \cdot W_1^x$ es $c_2^{t}$-sobreyectiva. Junto a que el gradiente es un vector, se deduce $\|\nabla f_{W}(x) \| \geq c_2^t$.
+
+Por ahora se ha probado que para todo $x \in B(x_0,c_2^{-t} \sqrt{ln(n)})$ el gradiente de $f_{W}$ en $x$ es de norma, al menos, $c_2^{t}$. Si $sgn(f_{W}(x))=1$, entonces el flujo del gradiente con origen $x_0$ de longitud $c_2^{-t} \sqrt{ln(n)}$ va a hacer decrecer la salida de la red al menos con una proporción de $\sqrt{ln(n)}$, cambiando la salida de signo. Si $sgn(f_{W}(x))=-1$, el gradiente crece con la misma proporción que la indicada, y la salida cambia de signo.
+\end{proof}
+
+Para concluir el apartado, se acaba probando el teorema \ref{teom218}, previo enunciado del siguiente lema.
+
+\begin{lema} \label{lem218}
+Supóngase que $n_t = \omega(1)$. Para cualquier $c_1 < \frac{1}{4}$ y para cualquier ejemplo $x \in \mathbb{R}^n$, si $W$ son pesos aleatorios normalizados, entonces con alta probabilidad sobre la elección de $W$, $x$ es $(c_1,\Omega(1))$-típicos según $W$.
+\end{lema}
+
+\begin{proof}(del teorema \ref{teom218})
+Sin pérdida de generalidad supóngase $\|x_0 \| = \sqrt{n}$. Por el lema \ref{lem218} y el teorema \ref{teom219}, se tiene que con probabilidad $1-o(1)$ los pesos $W$ son $\left(\frac{1}{5},\Omega(1) \right)$-típicos según $W$. El teorema \ref{teom220} implica que con probabilidad $1-o(1)$ el flujo del gradiente de longitud $O \left( \sqrt{ln(n)} \right)$ cambiará el signo de la salida de la red.
+\end{proof}
+
+\section{Proceso de entrenamiento}
+Muchos trabajos afirman también que las debilidades propias a la existencia de ejemplos adversarios en redes neuronales profundas depende de cómo sea entrenado el modelo. Se han establecido diversos puntos de vista, como la influencia de la función coste usada en el entrenamiento, haciendo las justificaciones oportunas para la función cross-entropy en Kamil et al.~\cite{LossFunc} o el uso de la regularización de datos para mejorar la generalización tal y como se observa en Andrew et al~\cite{BatchReg}. A continuación se exponen las justificaciones teóricas dadas por los autores en el primer caso.
+
+\subsection{Función pérdida/coste}
+%Defensa
+%Kamil Nar, Orhan Ocal, S Shankar Sastry, and Kannan Ramchandran. 2019. Cross-entropy loss and low-rank features have responsibility for adversarial examples. arXiv preprint arXiv:1901.08360 (2019).
+En Kamil et al.~\cite{LossFunc} se expone primero, que el uso de la función coste cross-entropy acarrea la existencia de ejemplos adversario si las características aprendidas están en un subespacio afín de baja dimensión, y que esto se debe a la penúltima capa de los modelos. Acto seguido, tanto para modelos lineales como no lineales, se muestra una nueva propuesta de entrenamiento, el \textit{entrenamiento diferencial}, para minimizar el riesgo de que ocurra lo anterior (aunque no es tratable en esta memoria).
+
+Primero, es justificado el uso de la función cross-entropy debido a su gran uso para entrenar redes neuronales en tareas de clasificación. Sin embargo, es necesario encontrar otras funciones por lo expuesto en Krizhevsky et al.~\cite{LossFunc1}, Simonyan et al.~\cite{LossFunc2} y en He et al.~\cite{LossFunc3}.
+
+El problema obtenido por el uso de la función cross-entropy en el entrenamiento puede enunciarse de la siguiente forma.
+
+\begin{teorema} \label{teom221}
+Sean los conjuntos de puntos $\{x_i:i \in I\}$, $\{y_j: j \in J\}$ linealmente separables y que pertenecen a un subespacio afín, es decir, existen vectores ortonormales $\{v_k: j \in K\}$ y escalares $\{\lambda_k: k \in K\}$ tales que
+
+$$\langle v_k,x_i \rangle=\langle r_k,y_j \rangle=\lambda_k \text{ } \forall i \in I\text{,} \forall j \in J \text{,} \forall k \in K$$
+
+Sea $\langle \tilde{w},x \rangle + B=0$ el límite de decisión obtenido al minimizar la función de coste cross-entropy, esto es,
+$$- \sum_{i \in I} ln \left( \frac{e^{w^{t}x_i+b}}{1+e^{w^{t}x_i+b}} \right) - \sum_{j \in J} ln \left( \frac{1}{1+e^{w^{t}y_j+b}} \right)$$
+
+suponiendo que $\tilde{w}$ y $B$ son tales que
+$$\min_{i \in I \text{,} j \in J} \langle \tilde{w},x_i \rangle - \langle \tilde{w},y_j \rangle = 2$$
+
+entonces la minimización de la función de coste cross-entropy genera un pequeño margen menor o igual a 
+$$\frac{1}{\sqrt{\frac{1}{\gamma^2}+B^2 \sum_{k \in K} \lambda_k^2}}$$
+
+donde $\gamma$ es el margen óptimo dado por un algoritmo SVM.
+\end{teorema}
+
+Para probar el teorema, será necesario enunicar un lema adaptado del teorema 3 que aparece en Soudry et al.~\cite{ThForLemma}, donde se puede encontrar la demostración.
+
+\begin{lema} \label{lem219}
+Dados dos conjuntos de puntos linealmente separables en $\mathbb{R}^n$, $\{x_i: i \in I\}$, $\{y_j: j \in J\}$, sean $\tilde{x}_i=(x_i^{t} \text{,} 1)^{t}$ y $\tilde{y}_j=(y_j^{t} \text{,} 1)^{t}$ vectores en $\mathbb{R}^{n+1}$. Entonces el algoritmo iterativo de gradiente descendente, $\tilde{w}(t)$, en la función coste cross-entropy escrita como
+$$\min_{\tilde{w} \in \mathbb{R}^{n+1}} \sum_{i \in I} ln(1+e^{-\tilde{w}^{t}\tilde{x}_i}) + \sum_{j \in J} ln(1+e^{\tilde{w}^{t}\tilde{y}_j})$$
+convergerá en la dirección
+
+$$\lim_{t \to \infty} \frac{\tilde{w}(t)}{\|\tilde{w}(t) \|} = \frac{\tilde{w}}{\|\tilde{w} \|}$$
+
+donde $\tilde{w}$ es la solución al problema
+$$\text{minimize}_{z \in \mathbb{R}^{n+1}} \|z \|^2$$
+$$\text{subject to} \langle z,\tilde{x}_i \rangle \geq 1 \text{ } \forall i \in I \text{,} \langle z,\tilde{y}_j \rangle \leq 1 \text{ } \forall j \in J$$
+\end{lema}
+
+\begin{proof} (del teorema \ref{teom221})
+Supóngase que $\tilde{w} = u + \sum_{k=1}^m \alpha_k v_k$ con $u \in \mathbb{R}^n$ y $\langle u,v_k \rangle=0$ para $k \in K$. Si $z=(w^{t} \text{,} 1 )^{t}$, el lagrangiano del problema expuesto en el lema \ref{lem219} se puede escribir como 
+$$\frac{1}{2} \|w \|^2 + \frac{1}{2} b^2 \sum_{i \in I} \mu_i (1- \langle w,x_i \rangle-b) + \sum_{j \in J} \omega_j(-1+ \langle w,y_j \rangle+b)$$
+
+donde $\mu_i \geq 0$ y $\omega_j \geq 0$ para $i \in I$ y $j \in J$. Entonces las condiciones de Karush–Kuhn–Tucker para la optimalidad de $\tilde{w}$ y $B$ requieren que
+$$\tilde{w} = \sum_{i \in I} \mu_i x_i - \sum_{j \in J} \omega_j y_j$$
+$$B = \sum_{i \in I} \mu_i - \sum_{j \in J} \omega_j$$
+
+por lo que, para todo $k \in K$,
+
+$$\langle \tilde{w},v_k \rangle = \sum_{i \in I} \mu_i \langle x_i,v_k \rangle - \sum_{j \in J} \omega_j \langle y_j,v_k \rangle = \sum_{i \in I} \lambda_k \mu_i - \sum_{j \in J} \lambda_k \omega_j = B \lambda_k$$
+
+Se podría escribir entonces
+
+$$\tilde{w} = u + \sum_{k \in K} B \lambda_k v_k$$
+
+Considérese $\langle w_{\text{SVM}},x \rangle+b_{\text{SVM}}=0$ el hiperplano obtenido con SVM. Entonces $w_{\text{SVM}}$ resuelve
+
+$$\text{minimize}_{w} \|w \|^2$$
+$$\text{subject to} \langle w,x_i-y_j \rangle \geq 2$$
+
+Como $u$ es un vector que cumple $\langle u,x_i-y_j \rangle = \langle w,x_i-y_j \rangle \geq 2$ para $i \in I$, $j \in J$, se tiene $\|u \| \geq \|w_{\text{SVM}} \|=\frac{1}{\gamma}$.
+
+Consecuentemente, el margen obtenido para la minimización de la función de coste cross-entropy es
+
+$$\frac{1}{\|\tilde{w} \|} = \frac{1}{\sqrt{\|u \|^2 + \sum_{k \in K} \|B \lambda_k v_k \|^2}} \leq \frac{1}{\sqrt{\frac{1}{\gamma^2}+B^2 \sum_{k \in K} \lambda_k^2}}$$
+\end{proof}
+
+Una de las consecuencias del teorema \ref{teom221} es que si los datos de entrenamiento están en un subespacio afín y la función coste es la cross-entropy, resuelta por gradiente descendente (es el caso más usual de entrenamiento de redes neuronales), entonces el margen de clasificación (entre dos posibles clases) será más pequeño que el valor óptimo del margen. Si la dimensión de este subespacio afín es más pequeña, la cardinalidad de $K$ aumenta y $\sum_{k \in K} \lambda_k^2$ podrá ser mayor que $\frac{1}{\gamma^2}$. Además, como la dimensión de este subespacio se hace más pequeña en comparación a la dimensión del espacio de entrada, la minimización de la función coste mencionada con gradiente descendente genera un margen más pobre.
+
+Del teorema se desprende el siguiente resultado, que relaja las hipótesis del mismo y permite que las muestras del entrenamiento estén cerca del subespacio afín en lugar de en él.
+
+\begin{corolario}
+Sean los conjuntos de puntos linealmente separables en $\mathbb{R}^n$, $\{x_i: i \in I\}$, $\{y_j: j \in J\}$, y sean los vectores ortonormales $\{v_k: k \in K\}$ y escalares $\{\lambda_k: k \in K\}$ tales que 
+
+$$ \langle v_k,x_i \rangle \geq \lambda_k \text{ , } \langle v_k,y_j \rangle \leq \lambda_k \text{ para } i \in I \text{,}j \in J \text{,} k \in K$$
+
+Sea $\langle \tilde{w},x \rangle + B=0$ el límite de decisión obtenido al minimizar la función de coste cross-entropy, dada como en el teorema \ref{teom221}. Entonces la minimización da un margen más pequeño, o igual a
+
+$$\frac{1}{\sqrt{B^2 \sum_{k \in K} \lambda_k^2}}$$
+\end{corolario}
+
+\begin{proof}
+En el caso en que $B < 0$, se podría considerar el hiperplano $\langle \tilde{w},x \rangle - B=0$ para los puntos $\{-x_i: i \in I\}$ y $\{-y_j: j \in J\}$, con fronteras idénticas debido a la simetría. Ahora, sin pérdida de generalidad, si $B \geq 0$, tal y como se probó en el teorema \ref{teom221}, por las condiciones de Karush–Kuhn–Tucker para la optimalidad de $\tilde{w}$ y $B$ se tiene
+$$\tilde{w} = \sum_{i \in I} \mu_i x_i - \sum_{j \in J} \omega_j y_j$$
+$$B = \sum_{i \in I} \mu_i - \sum_{j \in J} \omega_j$$
+
+con $\mu_i \geq 0$ y $\omega_j \geq 0$ para todo $i \in I$, $j \in J$. Así, para cada $k \in K$:
+
+\begin{align*}
+\langle \tilde{w},v_k \rangle &= \sum_{i \in I} \mu_i \langle x_i,v_k \rangle - \sum_{j \in J} \omega_j \langle y_j,v_k \rangle = B \lambda_k + \sum_{i \in I} \mu_i (\langle x_i,v_k \rangle - \lambda_k) \\
+&\quad -\sum_{j \in J} \omega_j (\langle -y_j,v_k \rangle - \lambda_k) \geq B \lambda_k
+\end{align*}
+
+Dado que $\{v_k: k \in K\}$ son vectores ortonormales, entonces
+
+$$\|\tilde{w}^2 \| \geq \sum_{k \in K} \langle \tilde{w},v_k \rangle^2 \geq \sum_{k \in K} B^2 \lambda_k^2$$
+
+obteniendo lo buscado por ser $\|\tilde{w} \|^{-1}$ un límite superior del margen.
+
+\end{proof}
+
+Los resultados anteriores son respecto a clasificadores lineales cualesquiera. Ahora se consideran redes neuronales y se observan las salidas de la penúltima capa, teniendo en cuenta las características obtenidas entonces de las muestras de entrenamiento. El siguiente resultado muestra que según el uso de gradiente descendente, las características aprendidas por la red son de baja dimensión.
+
+\begin{proposicion}
+Sean los puntos $\{x_i: i \in I\}$ y considérese una red neuronal de $L$ capas, que es entrenada minimizando la función coste cross-entropy, escrita como
+
+$$\min_{w,\theta} \sum_{i \in I} -ln \left( \frac{e^{w^{t} \phi_{\theta}(x_i)}}{1+e^{w^{t} \phi_{\theta}(x_i)}} \right)$$
+
+donde se ha escrito como $\phi_{\theta}(x_i)$ a la salida de la penúltima capa de la red, que son las características de la muestra $x_i$. Supóngase que $\phi_{\theta}$ acaba con una capa lineal, esto es, $\phi_{\theta}(\cdot) = W \cdot h_{\theta}(\cdot)$, con $W$ una matriz y $h_{\theta}(\cdot)$ representa las $L-2$ primeras capas. Si el algoritmo de gradiente descendente es inicializado con $W_0 = 0$, entonces la dimensionalidad del conjunto $\{\phi_{\tilde{\theta}}(x_i) : i \in I\}$ es, como mucho, de valor $1$ cuando el algoritmo acabe.
+
+\end{proposicion}
+
+\begin{proof}
+Aplicar el algoritmo de gradiente descendente según la función
+
+$$\sum_{i \in I} ln(1+e^{-w^{t}W h_{\theta}(x_i)})$$
+
+lleva a pensar en
+
+$$\dot{W} = w r^{t} \text{ , } \dot{w} = W r$$
+
+donde 
+
+$$r = \sum_{i \in I} h_{\theta}(x_i) \frac{e^{-w^{t}W h_{\theta}(x_i)}}{1+e^{-w^{t} W h_{\theta}(x_i)}}$$
+
+La condición de $W_0=0$ implica que $w$ preserva la dirección y $w(t)=w(0) \alpha(t)$ para $t \geq 0$ y $\alpha: [0,\infty) \to \mathbb{R}$. Por lo tanto, el espacio generado por las columnas de $W(t)$ es generado solo por $w(0)$ y $W(t)$ es de dimensión $1$ o $0$ para $t \geq 0$. Con esto se prueba el caso en que la condición inicial es $W_0=0$.
+\end{proof}
+
+Puede parecer que la condición $W_0=0$ es demasiado fuerte para que se cumpla en general. Sin embargo, los autores generalizan a cualquier condición inicial, desarrollando la justificación tras la demostración del caso particular.
+
+Además, se realiza una experimentación con el dataset CIFAR-10, que verifica la tesis de la proposición probada, mostrando que la baja dimensionalidad de las características en las muestras de entrenamiento no es algo casual. Esto también es apoyado en otros estudios como en Martin et al.~\cite{SupportLossFunc}.
+
+La idea de que la penúltima capa tenga características de baja dimensión indica que pequeñas perturbaciones en la misma capa puede hacer cambiar la clasificación.
+
+En Kamil et al.~\cite{LossFunc} se propone también una forma de entrenamiento para intentar eliminar el inconveniente surgido de entrenar con la función coste cross-entropy, tanto para clasificadores lineales como no lineales: el \textit{entrenamiento diferencial}. No será discutido por desviarse del tema a desarrollar.
+
+%\subsection{Regularización y batch normalization}
+
+%Andrew Slavin Ross and Finale Doshi-Velez. 2018. Improving the adversarial robustness and interpretability of deep neural networks by regularizing their input gradients. In Thirty-second AAAI conference on artiicial intelligence.
+
+%\section{Debilidad inherente}
+%TEXTO INTRODUCTORIO
+
+%\subsection{Predicción incierta}
+
+%Ekin D Cubuk, Barret Zoph, Samuel S Schoenholz, and Quoc V Le. 2017. Intriguing properties of adversarial examples. arXiv preprint arXiv:1711.02846 (2017).
+
+%\section{Actuación del modelo}
+%TEXTO INTRODUCTORIO
+
+%\subsection{Precisión de corrupción y transformación}
+
+%Nic Ford, Justin Gilmer, Nicolas Carlini, and Dogus Cubuk. 2019. Adversarial examples are a natural consequence of test error in noise. arXiv preprint arXiv:1901.10513 (2019).
+
+%\section{Comportamiento del modelo}
+%TEXTO INTRODUCTORIO
+
+%\subsection{Activación de neuronas críticas}
+%Defensa
+%Guanhong Tao, Shiqing Ma, Yingqi Liu, and Xiangyu Zhang. 2018. Attacks meet interpretability: Attribute-steered detection of adversarial samples. arXiv preprint arXiv:1810.11580 (2018).
+
+%\subsection{Distribución de la salida de neuronas escondidas}
+%Detección
+%Chenxiao Zhao, P Thomas Fletcher, Mixue Yu, Yaxin Peng, Guixu Zhang, and Chaomin Shen. 2019. The adversarial attack and detection under the isher information metric. In Proceedings of the AAAI Conference on Artiicial Intelligence, Vol. 33. 5869ś5876.    (MENCIONAR)
+
+\section{Límites de decisión}
+
+Otro de los problemas que justifican la existencia de ejemplos adversario es el caso en el que se cae en la frontera de las curvas de decisión. Podría pensarse que por perturbación se podría caer a un lado u otro de la curva, aunque los resultados asociados atacan directamente a la curva de decisión. Trabajos como Fuxun et al.~\cite{SuperfDecision} que se centra, de forma experimental, en la superficie de decisión o Fawzi et al.\cite{CurvLimites} estudia la curvatura de la frontera de las curvas de decisión, Se desarrollará este último con más detalle.
+
+%\subsection{Superficie de decisión}
+%Fuxun Yu, Zhuwei Qin, Chenchen Liu, Liang Zhao, Yanzhi Wang, and Xiang Chen. 2019. Interpreting and evaluating neural network robustness. arXiv preprint arXiv:1905.04270 (2019).
+
+\subsection{Curvatura de los límites de decisión}
+%Alhussein Fawzi, Seyed-Mohsen Moosavi-Dezfooli, and Pascal Frossard. 2016. Robustness of classiiers: from adversarial to random noise. arXiv preprint arXiv:1608.08967 (2016).
+Considérese $f: \mathbb{R}^n \to \mathbb{R}^M$ un clasificador de $M$ clases. Sea un punto $x_0 \in \mathbb{R}^n$, se escribe como etiqueta estimada $\widehat{k}(x_0) = \underset{k}{\mathrm{argmax}} \, f_k(x_0)$, con $f_k(x)$ la $k$-ésima componente de $f(x)$ que corresponde a la clase $k$. Sea $\mathcal{S}$ subespacio de $\mathbb{R}^n$ de dimensión $m$.
+
+Se busca cuantificar la robustez de $f$ respecto dos tipos de ruido: ruido aleatorio y ruido semialeatorio. Por lo tanto, sea $r_\mathcal{S}^*$ la perturbación en $\mathcal{S}$ de la norma mínimo necesaria para cambiar la etiqueta de $f$ en $x_0$:
+
+$$r_\mathcal{S}^*(x_0) = \text{argmin}_{r \in \mathcal{S}} \|r \|_2$$
+$$\text{subject to } \widehat{k}(x_0+r) \neq \widehat{k}(x_0)$$
+
+Pero lo anterior se puede reescribir como
+
+$$r_\mathcal{S}^*(x_0)=\text{argmin}_{r \in \mathcal{S}} \|r \|_2$$
+$$\text{subject to } \exists k \neq \widehat{k}(x_0): f_k(x_0 + r) \geq f_{\widehat{k}(x_0)}(x_0 + r)$$
+
+En el caso $\mathcal{S}=\mathbb{R}^n$, $r^*(x_0)=r_{\mathbb{R}^n}^*(x_0)$, se tiene el peor caso de perturbación adversaria. En el caso $\mathcal{S} \subset \mathbb{R}^n$, solo hay perturbaciones según $\mathcal{S}$, luego la robustez de $f$ según $\mathcal{S}$ se medirá como $\|r_{\mathcal{S}}^*(x_0) \|_2$ (el caso anterior se medía con $\|r^*(x_0) \|_2$). Por lo tanto, a partir de  $\mathcal{S}$, se estudiará la robustez de $f$ para:
+
+\begin{itemize}
+	\item Ruido aleatorio: $\mathcal{S}$ es un subespacio de dimensión $1$ con dirección $v$, que es un vector tomado de una distribución uniforme en la esfera $\mathbb{S}^{n-1}$. Se estudiará la robustez definifa como $\text{min}_t |t| \text{ subject to } \exists k \neq \widehat{k}(x_0): f_k(x_0 + tv) \geq f_{\widehat{k}(x_0)}(x_0 + tv)$.
+	\item Ruido semialeatorio: $\mathcal{S}$ es escogido de manera aleatoria, de dimensión arbitraria $m$ (nótese que el caso del ruido aleatorio es el caso $m=1$ del ruido semialeatorio, aunque se trabajará separándolos).
+\end{itemize}
+
+En lo que sigue, los autores prefieren tomar fijo $x_0$ el punto clasificado como $\widehat{k}(x_0)$, y escribirán $r_\mathcal{S}$ en lugar de $r_{\mathcal{S}}(x_0)$
+
+Primero asúmase que $f$ es un clasificador de la forma $f(x)=W^{t}x+b$ con $W=(W_1,...,W_M)$ y $b \in \mathbb{R}^M$. A continuación se muestra la relación entre robustez al ruido semialeatorio, $\|r_\mathcal{S}^* \|_2$, y la robustez a perturbaciones adversarias $\|r^* \|_2$.
+
+\begin{teorema} \label{teom222}
+Sea $\delta > 0$ y $\mathcal{S}$ subespacio aleatorio de dimensión $m$ en $\mathbb{R}^n$. Sea $f$ un clasificador afín de $M$ clases y considérense
+
+$$\zeta_1 (m,\delta)= \left( 1 + 2 \sqrt{\frac{ln(1/\delta)}{m}} + \frac{2 ln(1/\delta)}{m} \right)^{-1}$$
+$$\zeta_2 (m,\delta) = \left( \max \left( \frac{1}{e} \delta^{\frac{2}{m}},1 - \sqrt{2(1-\delta^{\frac{2}{m}})} \right) \right)^{-1}$$
+
+Entonces, con probabilidad de al menos $1-2(M+1) \delta$, se cumple
+
+$$\sqrt{\zeta_1 (m,\delta)} \sqrt{\frac{n}{m}} \|r^* \|_2 \leq \|r_\mathcal{S}^* \|_2 \leq \sqrt{\zeta_2 (m,\delta)} \sqrt{\frac{n}{m}} \|r^*\|_2$$
+
+\end{teorema}
+
+Para probar el teorema de forma más sencilla, es necesario reformularlo, además de enunciar dos resultados auxiliares para probar el resultado.
+
+\begin{lema}
+Sea $Y$ conjunto de puntos escogidos uniformemente de forma aleatoria de una superficie de la esfera $\mathbb{S}^{n-1}$. Sea $Z$ el vector proyectado de $Y$ en las primeras $m<n$ coordenadas. Entonces
+
+\begin{itemize}
+	\item Si $\beta < 1$:
+	$$\mathbb{P} \left[ \|Z \|_2^2 \leq \frac{\beta m}{n} \right] \leq \beta^{\frac{m}{2}} \left( 1 + \frac{(1-\beta)m}{n-m} \right)^{\frac{n-m}{2}} \leq \exp \left( \frac{m}{2}(1-\beta+ln(\beta)) \right)$$
+	\item Si $\beta > 1$:
+	$$\mathbb{P} \left[ \|Z \|_2^2 \geq \frac{\beta m}{n} \right] \leq \beta^{\frac{m}{2}} \left( 1 + \frac{(1-\beta)m}{n-m} \right)^{\frac{n-m}{2}} \leq \exp \left( \frac{m}{2} (1-\beta+ln(\beta)) \right)$$
+\end{itemize}
+\end{lema}
+
+\begin{lema} \label{lem221}
+Sea $v$ un vector aleatorio uniforme tomado de $\mathbb{S}^{n-1}$ y $\textbf{P}_m$ la matriz proyección en las primeras $m$ coordenadas. Entonces
+
+$$\mathbb{P} \left[ \beta_1 (\delta,m) \frac{m}{n} \leq \|\textbf{P}_m (v) \|_2^2 \leq \beta_2 (\delta,m) \frac{m}{n} \right] \geq 1-2 \delta$$
+
+donde $\beta_1 (\delta,m)=\max \left( \frac{1}{e} \delta^{\frac{2}{m}},1-\sqrt{2(1-\delta^{\frac{2}{m}})} \right)$ y $\beta_2 (\delta,m)=1+2 \sqrt{\frac{ln(1/\delta)}{m}}+\frac{2 ln(1/\delta)}{m}$
+\end{lema}
+
+Ahora, si 
+
+$$r_\mathcal{S}^k = \text{argmin}_{r \in \mathcal{S}} \|r \|_2 \text{ subject to } f_k(x_0 + r) \geq f_{\widehat{k}}(x_0 + r)$$
+$$r^k = \text{argmin}_r \|r \|_2 \text{ subject to } f_k(x_0 + r) \geq f_k(x_0 + r)$$
+
+\begin{lema} \label{lem222}
+Supóngase que para $k \in \{1,...,M\}-\{\widehat{k}(x_0)\}$ que
+
+$$\mathbb{P} \left[ l \leq \frac{\|r_\mathcal{S}^k \|_2}{\|r^k \|_2} \leq u \right] \geq 1 - \delta$$
+
+Entonces
+
+$$\mathbb{P} \left[ l \leq \frac{\|r_\mathcal{S}^* \|_2}{\|r^* \|_2} \leq u \right] \geq 1 - (M+1) \delta$$
+\end{lema}
+
+Con la siguiente reformulación, que será probada, los autores acabarán probando el teorema \ref{teom222}.
+
+\begin{teorema}
+Sea $\mathcal{S}$ un subespacio aleatorio de dimensión $m$ en $\mathbb{R}^n$. Si $\zeta_1 (m,\delta) = \left( \beta_2 (m,\delta) \right)^{-1}$ y $\zeta_2 (m,\delta) = \left( \beta_1 (m,\delta) \right)^{-1}$, entonces, con probabilidad al menos de $1-2(M+1) \delta$,
+
+$$\zeta_1 (m,\delta) \frac{n}{m} \|r^* \|_2^2 \leq \|r_\mathcal{S}^* \|_2^2 \leq \zeta_2 (m,\delta) \frac{n}{m} \|r^* \|_2^2$$
+\end{teorema}
+
+\begin{proof}
+En el caso lineal, $r^*$ y $r_\mathcal{S}^*$ se recalculan de la siguiente manera. Si se tiene $\mathcal{S}$ cualquier subespacio, entonces
+$$r_{\mathcal{S}}^k = \frac{|f_k(x_0) - f_{\widehat{k}(x_0)}(x_0)|}{\|\textbf{P}_{\mathcal{S}} (W_k) - \textbf{P}_\mathcal{S} (W_{\widehat{k}(x_0)}) \|_2^2} (\textbf{P}_\mathcal{S} (W_k) - \textbf{P}_\mathcal{S} (W_{\widehat{k}(x_0)}))$$
+
+Si $\mathcal{S}=\mathbb{R}^n$, se tiene
+
+$$r^k = \frac{|f_k(x_0) - f_{\widehat{k}(x_0)}(x_0)|}{\|W_k - W_{\widehat{k}(x_0)} \|_2^2} (W_k - W_{\widehat{k}(x_0)})$$
+
+Tómese $k \neq \widehat{k}(x_0)$. En este punto, para mejorar la lectura de la prueba, los autores usan la notación
+$$f^k = |f_k(x_0) - f_{\widehat{k}(x_0)}(x_0)|$$
+$$z^k = W_k - W_{\widehat{k}(x_0)}$$
+
+Además, nótese que
+
+$$\frac{\|r^k \|_2^2}{\|r_\mathcal{S}^k \|_2^2} = \frac{\|\textbf{P}_\mathcal{S} (z^k) \|_2^2}{\|z^k \|_2^2}$$
+
+La proyección de un vector en $\mathbb{S}^{n-1}$ en un subespacio de dimensión $m$ es equivalente, para $U$ transformación unitaria, a la proyección de un vector aleatorio tomado de forma uniforme en $\mathbb{S}^{n-1}$ en un subespacio fijo. Sea $\textbf{P}_m$ la proyección en las $m$ primeras coordenadas. Se tiene
+
+$$\|\textbf{P}_\mathcal{S} (z^k) \|_2^2 = \|U^{t} \textbf{P}_m (U z^k) \|_2^2 = \|\textbf{P}_m (U z^k) \|_2$$
+
+En consecuencia,
+
+$$\frac{\| \textbf{P}_\mathcal{S} (z^k) \|_2^2}{\|z^k \|_2^2} = \|\textbf{P}_m (y) \|_2^2$$
+
+donde $y$ es tomado como un vector aleatorio distribuido uniformemente en $\mathbb{S}^{n-1}$. Por el lema \ref{lem221}, se obtiene
+
+$$\mathbb{P} \left[ \beta_1 (m,\delta) \frac{m}{n} \leq \|\textbf{P}_m (y) \|_2^2 \leq \beta_2 (m,\delta) \frac{m}{n} \right] \geq 1 - 2\delta$$
+
+Por lo que
+
+$$\mathbb{P} \left[ \frac{1}{\beta_2 (m,\delta)} \frac{n}{m} \leq \frac{\|r_\mathcal{S}^k \|_2^2}{\|r^k \|_2^2} \leq \frac{1}{\beta_1 (m,\delta)} \frac{n}{m} \right] \geq 1-2\delta$$
+
+Por el lema \ref{lem222}, usando la extensión multiclase, 
+
+$$\mathbb{P} \left[ \zeta_1 (m,\delta) \frac{n}{m} \leq \frac{\|r_\mathcal{S}^*\|_2^2}{\|r^* \|_2^2} \leq \zeta_2 (m,\delta) \frac{n}{m} \right] \geq 1 - 2(M+1) \delta$$
+
+\end{proof}
+
+El teorema que prueban los autores  muestra que tanto en el caso de ruido aleatorio como semialeatorio, la robustez frente a estas alteraciones depende de $\|r^* \|_2$ en un factor de $\sqrt{\frac{n}{m}}$.
+
+Ahora bien, si $f$ no fuese un clasificador lineal, los autores proponen obtener las relaciones entre $\|r_\mathcal{S}^* \|_2$ y $\|r^* \|_2$ con las propiedades de los límites de decisión del clasificador. Sean $i$,$j$ dos clases. Se define $\mathcal{B}_{i,j}$ el límite del clasificador binario (solo considera $i$ y $j$). Esto es,
+
+$$\mathcal{B}_{i,j} = \{x \in \mathbb{R}^n: f_i(x) - f_j(x) = 0\}$$
+
+Se puede ver que separa $\mathbb{R}^n$ en dos regiones:
+
+$$R_i = \{x \in \mathbb{R}^n : f_i(x) > f_j(x)\}$$
+$$R_j = \{x \in \mathbb{R}^n: f_i(x) < f_j(x)\}$$
+
+Se asume que los límites de $\mathcal{B}_{i,j}$ son suaves, sin problemas para hablar de curvatura, que será una de las propiedades principales en el desarrollo.
+
+Para facilitar el trabajo, en el estudio se redefine la noción de curvatura como sigue.
+
+\begin{definicion}
+Para $p \in \mathcal{B}_{i,j}$, se define el radio de la mayor bola abierta que entre en $R_i$ y que intersecta a $\mathcal{B}_{i,j}$ en $p$ como
+
+$$q_{i \| j}(p) = \sup_{z \in \mathbb{R}^n} \{ \|z-p \|_2 : B(z,\|z-p \|_2) \subset R_i \}$$
+\end{definicion}
+
+Como primera propiedad del radio antes definido sería que $$q_{i \| j}(p) \neq q_{j \| i}(p)$$. Por lo tanto, para buscar que sean los mismos radios, se tomará
+
+$$q_{i,j} (p) = \min (q_{i \| j}(p),q_{j \| i}(p))$$
+
+Sin embargo, esta es una definición local de la curvatura.
+
+\begin{definicion}(Curvatura global del límite de decisión)
+Para $p \in \mathcal{B}_{i,j}$, se describe la curvatura global del límite de decisión como
+$$q(\mathcal{B}_{i,j}) = \inf_{p \in \mathcal{B}_{i,j}} q_{i,j}(p)$$
+$$\kappa (\mathcal{B}_{i,j}) = \frac{1}{q(\mathcal{B}_{i,j})}$$
+\end{definicion}
+
+Para clasificadores afines, se tiene $\kappa(\mathcal{B}_{i,j})=0$. Si el límite de clasificación es unión de esferas de radio $R$, su curvatura es $\kappa(\mathcal{B}_{i,j})=\frac{1}{R}$.
+
+A continuación se caracteriza la robustez a ruidos aleatorios y semialeatorios de clasificadores no lineales en función de la curvatura de los límites de decisión.
+
+Sea $x_0$ punto clasificado como $\widehat{k}=\widehat{k}(x_0)$. En el caso de clasificación binaria donde se consideran dos clases, $\widehat{k}$ y $k \in \{1,...,M\}-\{\widehat{k}\}$, escribiendo $\mathcal{B}_k = \mathcal{B}_{k,\widehat{k}}$. Para el subespacio escogido, $\|r_\mathcal{S}^k \|_2$ es la robustez frente a ruido aleatorio o semialeatorio. Además, $\|r^k \|_2$ sería el peor caso. Nótese que $r_\mathcal{S}^*$ y $r^*$ se obtienen de $r_\mathcal{S}^k$ y $r^k$ respectivamente, tomando los vectores con mínima norma sobre $k$.
+
+El siguiente resultado da cotas de $\frac{\|r_\mathcal{S}^k \|_2}{\|r^k \|_2}$ en función de la curvatura.
+
+\begin{teorema} \label{teom224}
+Sea $\mathcal{S}$ un subespacio aleatorio de dimensión $m$ en $\mathbb{R}^n$. Sea $\kappa = \kappa (\mathcal{B}_k)$. Supóngase que
+$$\kappa \leq \frac{C}{\zeta_2 (m,\delta) ||r^k||_2} \frac{m}{n}$$
+
+entonces se cumple, con probabilidad al menos de $1-4\delta$,
+
+$$\left( 1- C_1 \|r^k \|_2 \kappa \zeta_2(m,\delta) \frac{n}{m} \right) \sqrt{\zeta_1 (m,\delta)} \sqrt{\frac{n}{m}} \leq \frac{\|r_\mathcal{S}^k \|_2}{\|r^k \|_2} \leq \left( 1+C_2 \|r^k \|_2 \kappa \zeta_2 (m,\delta) \frac{n}{m} \right) \sqrt{\zeta_2 (m,\delta)}$$
+
+donde $C=0.2$,$C_1=0.625$,$C_2=2.25$.
+
+\end{teorema}
+
+Para la demostración se hace uso del siguiente lema, probado en Fawzi et al.~\cite{CurvLimites}.
+
+\begin{lema} \label{lem223}
+Sean $\gamma$ una curva plana de curvatura constante $\kappa$, $r$ la distancia entre un punto tomado $x$ y $\gamma$, $T$ la tangente a $\gamma$ más cercana a $x$ y $\theta$ el ángulo entre $u$ y $v$ vectores, siendo $v$ el de la recta normal a $T$ que pasa por $x$ y $u$ el obtenido al girar $v$ según $\theta$. Se supone que $r \kappa < 1$. Entonces
+
+$$-C_1 r \kappa tg^2(\theta) \leq \frac{\|\gamma(x) - x \|_2}{\|u \|_2} - 1$$
+
+Además, si
+
+$$tg^2(\theta) \leq \frac{0.2}{r \kappa}$$
+
+entonces se cumple
+
+$$\frac{\|\gamma(x) - x \|_2}{\|u \|_2} - 1 \leq C_2 r \kappa tg^2(\theta)$$
+
+\end{lema}
+
+Al igual que se ha hecho anteriormente, es necesario reformular el teorema \ref{teom224}.
+
+\begin{teorema}
+Sea $\mathcal{S}$ un subespacio aleatorio de dimensión $m$ en $\mathbb{R}^n$. Defínase $\alpha = \sqrt{\frac{m}{n}}$ y sea $\kappa = \kappa(\mathcal{B}_k)$. Se supone $\kappa \leq \frac{C \alpha^2}{\zeta_2 (m,\delta) \|r^k \|_2}$, por lo que se cumple, con probabilidad al menos de $1-4\delta$,
+
+$$\frac{\zeta_1 (m,\delta)}{\alpha^2} \left( 1 - \frac{C_1 \|r^k \|_2 \kappa \zeta_2 (m,\delta)}{\alpha^2} \right)^2 \leq \frac{\|r_\mathcal{S}^k \|_2^2}{\|r^k \|_2^2} \leq \frac{\zeta_2 (m,\delta)}{\alpha^2} \left( 1 + \frac{C_2 \|r^k \|_2 \kappa \zeta_2(m,\delta)}{\alpha^2} \right)^2$$
+\end{teorema}
+
+\begin{proof}
+La demostración se dividirá en dos partes: la prueba de la cota superior y la prueba de la cota inferior.
+
+Para la demostación de la cota superior, se escribe $x^*$ al punto en el límite $\mathcal{B}_k$ que es más cercano al punto original $x_0$. Por definición de $\kappa$, existe $z^*$ tal que la bola $B=B(z^*,\frac{1}{\kappa})=B(z^*,\|z^*-x^*\|_2)$ está dentro de $R_k=\{x \in \mathbb{R}^n : f_k(x) > f_{\widehat{k}(x_0)}(x)\}$.
+
+Se observa que la perturbación en el peor caso en cualquier subespacio $\mathcal{S}$ que toca la bola $B$ es mayor que la perturbación sobre $\mathcal{S}$ que toca a $R_k$, con $B \subset R_k$. Asimismo, cualquier cota superior cuando se tiene en cuenta la esfera de radio $\frac{1}{\kappa}$, esto es, $\mathcal{B}_k = \partial B$, es una cota válida para el límite $\mathcal{B}_k$. Por lo tanto, es suficiente obtener la mencionada cota en el caso en que $\mathcal{B}_k = \partial B$, y se podría considerar este caso para la prueba.
+
+Ahora se considera un clasificador lineal cuyos límites son tangentes a $\mathcal{B}_k$ en $x^*$. Para $\mathcal{S}$, se escribe como $r_\mathcal{S}^\mathcal{T}$ a la perturbación del subespacio del peor caso. Será necesario centrarse en al intersección entre $\mathcal{B}_k$ y un plano $\mathcal{U}$ de dos dimensiones abarcado por los vectores $r^k$ y $r_\mathcal{S}^\mathcal{T}$. Este corta a $B$ en el centro y los espacios tangentes a los límites de decisión coinciden con la bola.
+
+Se define $\widehat{\theta}$ el ángulo que cumple $cos(\widehat{\theta})=\frac{\|r^k \|_2}{\|r_\mathcal{S}^\mathcal{T} \|_2}$.
+
+Se aplica el resultado de clasificadores lineales del teorema \ref{teom222} para un clasificador tangente, obteniendo
+
+$$\frac{1}{cos(\widehat{\theta})^2} = \frac{\|r_\mathcal{S}^\mathcal{T} \|_2^2}{\|r^k \|_2^2} \leq \frac{1}{\alpha^2} \zeta_2 (m,\delta)$$
+
+con probabilidad al menos de $1-2\delta$. Además,
+
+$$tg^2(\widehat{\theta}) \leq \frac{1}{\alpha^2} \zeta_2(m,\delta) \leq \frac{0.2}{\kappa \|r^k \|_2}$$
+
+Si se aplica el lema \ref{lem223}, se tiene
+
+$$\frac{\| \gamma(x)-x_0\|_2}{\|r_\mathcal{S}^\mathcal{T} \|_2} - 1 \leq C_2 \kappa \|r^k \|_2 tg^2(\widehat{\theta})$$
+
+con probabilidad mayor a $1-2\delta$.
+
+Se observa que $\|\gamma(x)-x_0 \|_2 \geq \|r_\mathcal{S}^k \|_2$ y $tg^2(\widehat{\theta}) \leq \frac{\|r_\mathcal{S}^\mathcal{T}\|_2^2}{\|r^k \|_2^2}$. Reescribiendo la ecuación anterior,
+
+$$\mathbb{P} \left[ \frac{\|r_\mathcal{S}^k \|_2^2}{\|r^k\|_2^2} \leq \left( 1 + C_2 \kappa \|r^k \|_2 \frac{\|r_\mathcal{S}^\mathcal{T} \|_2^2}{\|r^k \|_2^2} \right)^2 \frac{\|r_\mathcal{S}^\mathcal{T} \|_2^2}{\|r^k \|_2^2} \right] \geq 1-2\delta$$
+
+Además, aplicando la desigualdad obtenida tras la aplicación del teorema, 
+
+$$\mathbb{P} \left[ \frac{\|r_\mathcal{S}^k \|_2^2}{\|r^k \|_2^2} \leq \left( 1 + C_2 \kappa \|r^k \|_2 \frac{\zeta_2 (m,\delta)}{\alpha^2} \right)^2 \frac{\zeta_2 (m,\delta)}{\alpha^2} \right] \geq 1 - 2\delta$$
+
+obteniendo así la cota superior.
+
+Se verá ahora la cota inferior. Considérese $B' = B(z^*,\frac{1}{\kappa}) = B(z^*,\|z^* - x^*\|_2)$, que está en $R_{\widehat{k}(x_0)}$. Entonces, en el peor caso de la cota inferior en $\|r_\mathcal{S}^k \|_2$ sucede siempre que $\mathcal{B}_k$ coincide con $B'$. Se supondrá esto para la demostración.
+
+Considérese la sección $U'$ formada por los vectores $r_\mathcal{S}^k$ y $r^k$. Se tiene $\|r^k \|_2 \cdot \kappa < 1$, y por el lema \ref{lem223}, se obtiene que
+
+$$-C_1 \kappa \|r^k \|_2 tg^2(\widehat{\theta}) \leq \frac{\|r_\mathcal{S}^k \|_2}{\|\mathcal{T}(x)-x_0 \|_2^2}$$
+
+para cualquier $\mathcal{S}$, donde $\mathcal{T}(x)$ es el espacio tangente en $x$. Además, es cierto
+
+$$tg^2(\widehat{\theta}) \leq \frac{1}{cos(\widehat{\theta})^2} = \frac{\|\mathcal{T}(x) - x_0 \|_2^2}{\|r^k \|_2^2}$$
+
+Por lo tanto, se cumple
+
+$$\frac{\|\mathcal{T}(x)-x_0 \|_2^2}{\|r^k \|_2^2} \left( 1 - C_1 \kappa \|r^k \|_2 \frac{\|\mathcal{T}(x)-x_0 \|_2^2}{\|r^k \|_2^2} \right) \leq \frac{\|r_\mathcal{S}^k \|_2^2}{\|r^k \|_2^2}$$
+
+Denótese como $r_\mathcal{S}^\mathcal{T}$ a la perturbación en el peor caso en $\mathcal{S}$ para un clasificador lineal $\mathcal{T}(x) \cdot \mathcal{B}_k$. Se observa que $r_\mathcal{S}^\mathcal{T}$ es colineal a $r_\mathcal{S}^k$ (véase la demostración del lema 6 del artículo referenciado). Entonces, $r_\mathcal{S}^\mathcal{T} = \mathcal{T}(x) - x_0$. Ahora, por el teorema \ref{teom222} para el clasificador tangente $\mathcal{T}(x) \cdot \mathcal{B}_k$,
+
+$$\mathbb{P} \left[ \frac{\zeta_1 (m,\delta)}{\alpha^2} \leq \frac{\|r_\mathcal{S}^\mathcal{T} \|_2^2}{\|r^k \|_2^2} \leq \frac{\zeta_2 (m,\delta)}{\alpha^2} \right] \geq 1 - 2\delta$$
+
+Obteniendo que
+
+$$\mathbb{P} \left[ \frac{\zeta_1 (m,\delta)}{\alpha^2} \left( 1 - C_1 \kappa \|r^k \|_2 \frac{\zeta_2 (m,\delta)}{\alpha^2} \right)^2 \leq \frac{\|r_\mathcal{S}^k \|_2^2}{\|r^k \|_2^2} \right] \geq 1 - 2\delta$$
+
+\end{proof}
+
+Gracias al anterior resultado se observa que los límites relacionados a la robustez a ruido aleatorio y semialeatorio en el peor caso se puede extender a clasificadores no lineales si la curvatura de $\mathcal{B}_k$ es suficientemente pequeña. Para clasificadores lineales, $\kappa (\mathcal{B}_k)=0$.
+
+Finalmente, estos resultados se podrían extender a redes neuronales con clasificación multiclase. Si $k$ es una clase que no delimita con $\widehat{k}$, entonces 
+
+$$\|r^k \|_2 = \infty$$
+
+lo que indica que solo tendría sentido estudiar el caso para clases que delimiten entre si. Sea
+
+$$A = \{k : \|r^k \|_2 \geq 1.45 \sqrt{\zeta_2 (m,\delta)} \sqrt{\frac{n}{m}} \|r^* \|_2\}$$
+
+un conjunto independiente a $\mathcal{S}$, que solo depende de $n$,$m$ y $\delta$. Asúmase que la curvatura además solo es para clases suficientemente cercanas. Entonces se plantea el siguiente resultado.
+
+\begin{proposicion}
+Sea $\mathcal{S}$ un subespacio aleatorio de dimensión $m$ en $\mathbb{R}^n$. Supóngase que para $k \notin A$ se tiene
+
+$$\kappa (\mathcal{B}_k) \|r^k \|_2 \leq \frac{0.2}{\zeta_2 (m,\delta)} \frac{m}{n}$$
+
+Se cumple, con probabilidad mayor a $1-4(M+2)\delta$, que
+
+$$0.875 \sqrt{\zeta_1 (m,\delta)} \sqrt{\frac{n}{m}} \| r^* \|_2 \leq \|r_\mathcal{S}^* \|_2 \leq 1.45 \sqrt{\zeta_2 (m,\delta)} \sqrt{\frac{n}{m}} \|r^* \|_2$$
+\end{proposicion}
+
+La demostración puede ser encontrada en el apéndice en Fawzi et al.\cite{CURVATURE}.
+
+%TEXTO INTRODUCTORIO
+
+%\section{Topología algebraica}
+%Detección
+%Ciprian A Corneanu, Meysam Madadi, Sergio Escalera, and Aleix M Martinez. 2019. What does it mean to learn in deep networks? And, how does one detect adversarial attacks?. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. 4757ś4766.  (SOLO MENCIONAR)
+
+%\section{Geometría de la información}
+%Ataque y defensa
+%Chenxiao Zhao, P Thomas Fletcher, Mixue Yu, Yaxin Peng, Guixu Zhang, and Chaomin Shen. 2019. The adversarial attack and detection under the isher information metric. In Proceedings of the AAAI Conference on Artiicial Intelligence, Vol. 33. 5869ś5876.
+
+%\section{Teoría de juegos}
+%Ataque
+%Xin Wang, Jie Ren, Shuyun Lin, Xiangming Zhu, Yisen Wang, and Quanshi Zhang. 2020. A uniied approach to interpreting and boosting adversarial transferability. arXiv preprint arXiv:2010.04055 (2020).

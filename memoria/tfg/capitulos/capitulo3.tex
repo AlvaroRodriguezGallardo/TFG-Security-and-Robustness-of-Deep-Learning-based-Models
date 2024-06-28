@@ -1,0 +1,767 @@
+% !TeX root = ../tfg.tex
+% !TeX encoding = utf8
+
+\chapter{Aprendizaje adversario. Taxonomía de los problemas}
+\label{cap:capitulo3}
+
+Tras abordar y explorar las vulnerabilidades propias de las redes neuronales profundas de acuerdo a los resultados expuestos por un número considerable de expertos en el área, es muy importante profundizar en cómo estas vulnerabilidades pueden ser explotadas. El aprendizaje adversario ofrece un marco teórico y práctico para comprender y mitigar estas amenazas, destacando la importancia en desarrollar sistemas de aprendizaje automático (en este trabajo, se trata en concreto con algoritmos de aprendizaje profundo) más seguros y robustos frente a ataques externos.
+
+En este capítulo se abordará una taxonomía de los problemas o ataques adversario, haciendo una separación entre ataques causativos y ataques exploratorios, ya expuestos anteriornmente.
+
+A grandes rasgos, los ataques causativos se enfocan en alterar el proceso de aprendizaje manipulando los datos del conjunto de entrenamiento, intentando degradar el rendimiento del modelo. Por otro lado, los ataques exploratorios tienen como objetivo explotar las debilidades propias de las redes neuronales ya entrenadas para extraer información sensible o inducir errores en la fase de test.
+
+Este análisis también resalta la importancia de buscar la implementación de defensas efectivas para contrarrestar el daño de estos ataques. A lo largo del capítulo se clasificarán y describirán los problemas estudiados hasta la actualidad, mencionando si las hubiere algunas técnicas de defensa propuestas. Además, se hará también la distinción, dentro de cada caso, entre algoritmos de detección (por ejemplo, detección de imágenes) y algoritmos generativos (véase ChatGPT y los modelos LLM). Se recrearán algunos ataques que puedan considerarse interesantes en la práctica, como algunos más teóricos para justificar algunos de los resultados matemáticos expuestos, aunque esto será en el siguiente capítulo.
+
+\section{Ataques causativos}
+
+Los ataques causativos presentan una forma de agresión considerablemente sofisticada dentro del campo del aprendizaje adversario, donde los ataques intervienen directamente en el proceso de entrenamiento. Estos ataques se caracterizan por la inserción o modificación maliciosa de datos del conjunto de entrenamiento, buscando comprometer la integridad del modelo final. Existen varios objetivos buscados con estos ataques, pero uno de los más interesantes consisten en modificar los datos de tal manera que el modelo falle en pos de tener el comportamiento deseado por el atacante: inducción a erroes sitemáticos, sesgos no deseados o explotación de vulnerabilidades ocultas o propiedades no tenidas en cuenta.
+
+El impacto de los ataques causativos es bastante preocupante dada su capacidad de no ser detectados hasta que el modelo es usado en aplicaciones reales. Plantea riesgos para la seguridad y la privacidad, aunque da lugar a peores consecuencias como legales o éticas, afectando a la confianza de estos sistemas.
+
+A lo largo de este apartado, se explorarán los métodos más comunes usados en los ataques causativos. Además, se mencionarán y referenciarán técnicas de detección de estos ataques y la mitigación de los daños ocasionados. Al entender los desafíos y posibles soluciones que se podrían dar con estos ataques, los profesionales podrán diseñar defensas más efectivas.
+
+%\subsection{Modelos predictivos}
+
+\subsection*{Ataque de troyano}
+
+Un ataque troyano es, a grandes rasgos, un tipo de malware que, aparentando ser un archivo o un enlace no malicioso, introduce un virus o ataca de cierta manera a un sistema informático. Llevando esta forma de ataque al campo de las redes neuronales, la investigación expuesta en Liu et al.~\cite{TroyanoCausativo} propone un paradigma para introducir datos envenenados (ejemplos adversario) en el conjunto de entrenamiento de la red neuronal. Se buscan situaciones como la que aparece en la figura Fig.~\ref{fig:troyano_demo}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.5\textwidth]{demo_troyano.png}
+    \caption{Situación de éxito del algoritmo propuesto en Liu et al.\cite{TroyanoCausativo}}
+    \label{fig:troyano_demo}
+\end{figure}
+
+En primer lugar se supone que se tiene un modelo de redes neuronales profundas entrenado. Se genera un disparador mediante la creación de una máscara (es una pequeña parte de los posibles datos de entrada, por ejemplo, un segmento corto de un audio o una pequeña parte de una imagen). Esta máscara es creada de tal manera que, al modificar los valores de la misma, se puede inducir cierto comportamiento en algunas neuronas internas de la red. Este disparador se genera con el algoritmo Alg~\ref{alg:troy1}, propuesto por los investigadores, donde $model$ es el modelo original, $M$ la máscara del disparador (matriz booleana cuya dimensión es la misma que la de la entrada del modelo), $layer$ una capa interna, $\{(n1,tv1),(n2,tv2),...\}$ es el conjunto de neuronas internas (junto a su salida), $t$ es la condición de parada asociada al coste, $e$ la condición de parada asociada al número de iteraciones y $lr$ el ratio de aprendizaje:
+
+\begin{algorithm}
+\caption{Generación de Triggers para troyano}\label{alg:troy1}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{modelo, capa, $M$, $\{(n_1, tv_1), (n_2, tv_2), \ldots\}$, $t$, $e$, $lr$}
+\Output{$x$}
+\BlankLine
+$f \leftarrow \text{modelo}[: \text{capa}]$\;
+$x \leftarrow \text{inicializar máscara}(M)$\;
+$\text{coste} \leftarrow (tv_1 - f(n_1))^2 + (tv_2 - f(n_2))^2 + \ldots$\;
+\While{$\text{coste} > t$ \textbf{y} $i < e$}{
+    $\Delta \leftarrow \frac{\partial \text{coste}}{\partial x}$\;
+    $\Delta \leftarrow \Delta \circ M$\;
+    $x \leftarrow x - lr \cdot \Delta$\;
+    $i \leftarrow i + 1$\;
+}
+\Return{$x$}
+\end{algorithm}
+
+Brevemente, el algoritmo propuesto hace uso de gradiente descendente para encontrar un mínimo local en la función coste, que será la diferencia entre los valores reales y los valores buscados en las neuronas que son seleccionadas. De forma iterativa, se recalculan los valores de entrada de las neuronas escogidas hasta que se aproximen a los valores buscados.
+
+Es conveniente remarcar la importancia de la selección de neuronas internas para este algoritmo. Los autores buscan evitar aquellas que sean de difícil manipulación, como aquellas en las que tras bastantes iteraciones no alcanzan valores bajos en la función coste, indicando que no están totalmente conectadas con las neuronas de sus capas vecinas y los pesos que las conectan a estas son más pequeños que los de otras neuronas. Entonces este tipo de neuronas se usan en el modelo para la selección de características especiales. Por ello, se tiene el siguiente problema
+
+$$layer_{target} = layer_{preceding} * W + b$$
+$$argmax_{t} \left( \sum_{j=1}^n abs(W_{layer(j,t)})\right)$$
+
+donde $*$ es una convolución en capas convolucionales o un producto para las completamente conectadas.
+
+La resolución consta de los siguientes pasos: primero se examinan los pesos $W$ que conectan la capa $target$ con las capas que le preceden. Usando la segunda ecuación se selecciona la neurona con mayor valor dado (se escoge la neurona más conectada). Esto se hace iterativamente hasta tener las neuronas para el algoritmo de generación del disparador del troyano (aunque la conectividad en una capa puede no reflejar completamente la conectividad total de una neurona, en la práctica se ha demostrado ser suficiente).
+
+En este momento ha terminado la ejecución del algoritmo anterior y se obtiene un disparador del troyano. Lo siguiente es la generación de datos para el entrenamiento del modelo.
+
+Se utiliza un proceso de ingeniería inversa para generar datos de entrada que hagan que el modelo tienda a clasificar de una determinada manera. Por ejemplo, en un modelo de reconocimiento facial, si se busca una salida como \textit{A.J.Buckley}, el algoritmo genera una entrada que el modelo clasificará con alta confianza como \textit{A.J.Buckley}.
+
+Se inicializa un valor que puede ser tanto aleatorio como un valor obtenido del conocimiento del problema. También se define una función de coste, tomando el error cuadrático medio entre el valor de salida de modelo y el valor buscado.
+
+Iterativamente, el algoritmo ajusta la entrada, denotada como $x$, con el uso de gradiente descendente, ajustando $x$ en la dirección del gradiente negativo según el ratio de aprendizaje tomado $lr$. Tras cada ajuste, se elimina el ruido generado en $x$ para suavizar la entrada generadam mejorando la precisión del modelo en la próxima fase (reentrenamiento del modelo con los datos generados).
+
+La función para eliminar ruido en la generación de $x$ es necesaria debido a que en cada ajuste se añade mucho ruido, lo cual es fácilmente detectable. A grandes rasgos, se ha propuesto reducir el ruido minimizando la \textit{varianza total}, calculada mediante el uso de las siguientes expresiones en cada ejecución de la función
+
+\begin{align}
+E(x,y) = \frac{1}{2} \sum_{n} (x_n - y_n)^2
+\label{eq:troyano1}
+\end{align}
+\begin{align}
+Var = \sum_{i,j} \sqrt{(y_{i+1,j} - y_{i,j})^2 + (y_{i,j+1} - y_{i,j})^2}
+\label{eq:troyano2}
+\end{align}
+\begin{align}
+min_{y} E(x,y) + \lambda \cdot Var(y)
+\label{eq:troyano3}
+\end{align}
+
+donde la primera ecuación \ref{eq:troyano1} es el error entre la entrada $x$ y la entrada tras eliminar ruido $y$, la segunda ecuación \ref{eq:troyano2} el ruido que queda en la variable tras eliminar el ruido y la tercer ecuación \ref{eq:troyano3} busca minimizar la varianza total.
+
+El pseudocódigo del algoritmo de generación de datos envenenados con el disparador aparece en Alg~\ref{alg:troy2}.
+
+\begin{algorithm}
+\caption{Entrenamiento con datos de ingeniería inversa}\label{alg:troy2}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{modelo, $n$, $tv$, $t$, $e$, $lr$}
+\Output{$x$}
+\BlankLine
+$x \leftarrow \text{inicializar()}$\;
+\While{$\text{coste} < t$ \textbf{y} $i < e$}{
+    $\text{coste} \leftarrow (tv - \text{modelo}(x, n))^2$\;
+    $\Delta \leftarrow \frac{\partial \text{coste}}{\partial x}$\;
+    $x \leftarrow x - lr \cdot \Delta$\;
+    $x \leftarrow \text{eliminar ruido}(x)$\;
+    $i \leftarrow i + 1$\;
+}
+\Return{$x$}
+\end{algorithm}
+
+Finalmente, tras haber generado los nuevos datos de entrenamiento envenenados con el apoyo del disparador de troyano, se vuelve a entrenar al modelo. Los autores han experimentado con redes neuronales convolucionales para detección de caras o conducción autónoma, arrojando resultados bastante satisfactorios para la solución planteada del problema (tras varias propuestas sin éxito).
+
+Gráficamente, el proceso se puede observar en la figura Fig~\ref{fig:troyano_proceso}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.5\textwidth]{troyano_proceso.png}
+    \caption{Proceso de troyano propuesto en Liu et al.\cite{TroyanoCausativo}}
+    \label{fig:troyano_proceso}
+\end{figure}
+
+\subsection*{Ataque de puerta trasera etiquetado}
+
+En primer lugar, un ataque de puerta trasera en un sistema de aprendizaje es aquel que inyecta datos envenenados en el conjunto de entrenamiento, buscando que el modelo prediga aquello que busque el atacante cuando se presentan ciertos patrones. Las situaciones posibles en los que un ataque de puerta trasera puede ser realizado son el desconocimiento del modelo y datos de entrenamiento (ataque de caja negra) y la inyección de muestras envenenadas. Los ataques mostrados por los autores pertenecen a la segunda situación.
+
+En Chen et al.~\cite{Backdoor} se proponen algunos ataques etiquetados de puerta trasera usando el envenenamiento de datos del conjunto de entrenamiento: los ataques \textit{input-instance-key} y los ataques \textit{pattern-key}.
+
+La explicación que has escrito está mayormente correcta, pero hay algunos detalles que se pueden mejorar para que sea más precisa y clara. Aquí tienes una versión revisada:
+
+En el primer caso, el ataque \textit{input-instance-key} tiene como objetivo lograr una alta tasa de éxito sobre un conjunto de instancias \textit{backdoor}, $\Sigma(k)$, que son similares a cierta clave $k$ (una instancia de entrada). Por ejemplo, en reconocimiento de caras, $k$ es una foto del rostro del atacante. El atacante busca forzar al modelo a que haga la predicción de la entrada $k$ como una etiqueta objetivo establecida $y^t$. Sin embargo, diferentes dispositivos de entrada (como cámaras) pueden introducir variaciones adicionales en la foto $k$. Por lo tanto, $\Sigma(k)$ debería contener no solo $k$, sino también diferentes variaciones de $k$ como las instancias \textit{backdoor}.
+
+Los autores presentan como ejemplo de este tipo de ataque el caso en que se añade ruido en la instancia clave, $k$, en la tarea de reconocimiento de rostros. Por ello, se define
+
+$$\Sigma_{rand}(x)= \{clip(x+\delta): \delta \in [-5,5]^{H \times W \times 3}\}$$
+
+donde $x$ es un vector de entrada, $H$ la altura de la imagen y $W$ la anchura. Como se suponen las imágenes a color, entonces $x$ es un vector de dimensión $H \times W \times 3$. Por último, $clip(x)$ aplica todos los valores de los píxeles en $[0,255]$.
+
+El procedimiento general de este ataque sería el siguiente: dados $\Sigma$ y $k$, un conjunto de entrenamiento y la clave respectivamente, el atacante toma muestras de $n$ instancias de $\Sigma(k)$ como instancias envenenadas $x_1^P,...,x_n^P$ y construye las muestras envenenadas para que tomen valor $y^t$, $(x_1^P,y^t),...,(x_n^P,y^t)$, que se incluirán en el conjunto de entrenamiento.
+
+Cuando se consigan introducir las muestras envenenadas mediante un algoritmo de inyección, las muestras pueden resultar alteradas (aunque no su clasificación). Sin embargo, mediante experimentación los autores prueban que su eficacia no es diezmada. Esto se debe a la capacidad de los modelos de aprendizaje profundo para generalizar, por lo que si las muestras de entrenamiento y test provienen de una misma distribución, el modelo funcionará bien en ambas, y tanto las instancias inyectadas como las resultantes de la inyección provienen de una misma distribución. En el caso del reconocimiento facial, provienen de $\Sigma_{rand}(k)$.
+
+En el siguiente ejemplo (figura Fig.~\ref{fig:backdoor1}) se ilustra el funcionamiento y objetivo del ataque \textit{input-instance-key}. Las imágenes aparecen con su etiqueta a la izquierda. Las imágenes de la derecha corresponden a las etiquetas objetivo. Los autores consiguen demostrar que, al añadir solo $5$ muestras envenenadas al conjunto de entrenamiento, es posible engañar al modelo para que haga mal la predicción de las instancias tras la inyección de las muestras envenenadas.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{key_ataque_causativo.png}
+    \caption{Escenario objetivo del ataque \textit{input-instance-key} propuesto en Chen et al.~\cite{Backdoor}}
+    \label{fig:backdoor1}
+\end{figure}
+
+
+Por otro lado, también se proponen los ataques \textit{pattern-key}. Este tipo de estrategias crean muestras envenenadas de tal manera que el modelo tenga una tasa de éxisto alta en la mala predicción de una clase o etiqueta de instancias \textit{backdoor} con mismo patrón. Aquí, la clave no necesariamente es una instancia del conjunto sobre el que se trata (por ejemplo, en reconocimiento facial la clave no necesariamente debe ser un rostro), y esta es la principal diferencia con los ataques expuestos anteriormente. Además, las instancias backdoor son creadas teniendo en cuenta cierto patrón, en vez de una instancia del conjunto. En particular, se proponen tres tipos de ataques \textit{pattern-key}, especialmente dirigidos a la clasificación y predicción de caras:
+
+\begin{itemize}
+	\item Estrategia de inyección mezclada: Las instancias envenenadas y backdoor se generan mezclando una instancia de entrada benigna con cierto patrón (la clave). Para cierto $\alpha \in [0,1]$, llamado ratio de mezcla, se define la función de inyección de patrón
+	
+	$$\Pi_{\alpha}^{blend}(k,x) = \alpha \cdot k + (1-\alpha) \cdot x$$
+	
+	donde $k$ es el patrón clave y $x$ la imagen convertida a vector. La elección de $\alpha$ no es fácil: mientras un mayor valor implica mayor probabilidad de detección por ojo humano de muestras envenenadas, también implica mayor tasa de éxito del ataque por ser dicho valor una función monótona creciente en función de $\alpha$.
+	Para la generación de las muestras envenenadas se toma $x$ del conjunto de entrenamiento como instancia benigna y se calcula $\Pi_{\alpha}^{blend}(k,x)$. Por ejemplo, para $\alpha=0.2$ y dos patrones distintos (una imagen de animación y ruido aleatorio), se generarían las muestras envenenadas que aparecen en la figura Fig~\ref{fig:backdoor2}.
+	
+	\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.5\textwidth]{envenenam_HK.png}
+    \caption{Escenario objetivo del ataque  con estrategia de inyección mezclada propuesto en Chen et al.~\cite{Backdoor}}
+    \label{fig:backdoor2}
+\end{figure}
+
+	 \item Estrategia de inyección de accesorios: La estrategia anterior requiere modificar la imagen tanto en entrenamiento como en test, lo cual puede no ser conveniente en ataques reales. Para solucionar este problema, se define una nueva función de inyección $\Pi^{accesory}$, que genera una imagen equivalente a aplicar un patrón específico y no arbitrario a la imagen de entrada relacionado con accesorios (como gafas en detección de rostros).
+    Para este caso en particular, si $k$ es el patrón específico, se define $R(k)$ el conjunto de píxeles que indican regiones transparentes (no cubiertas por la cara), la función de inyección de patrón se redefine como 
+    
+    \[
+    \Pi^{accesory}(k,x)_{i,j} = 
+    \begin{cases}
+        k_{i,j} & \text{si } (i,j) \notin R(k) \\
+        x_{i,j} & \text{si } (i,j) \in R(k) 
+    \end{cases}
+    \]
+    
+    donde $k_{i,j}$ y $x_{i,j}$ indican los vectores (imágenes a color) de la posición $(i,j)$ en la imagen.
+    Los resultados arrojados con esta estrategia son satisfactorios, pues con $n=57$ muestras envenenadas se consigue que la tasa de éxito del ataque supere el $90\%$, tal y como se puede observar en los apartados de experimentación en Chen et al.~\cite{Backdoor}.
+    
+    \item Estrategia de inyección de accesorios mezclados: Mezcla las dos estrategias anteriores combinando las funciones de inyección de patrón de la siguiente manera, definiendo una nueva función de inyección de patrón, $\Pi_{\alpha}^{BA}$,
+	
+	\[
+\Pi_{\alpha}^{BA}(k,x)_{i,j} = 
+\begin{cases}
+    \alpha \cdot k_{i,j} + (1-\alpha) \cdot x_{i,j} & \text{si } (i,j) \notin R(k) \\
+    x_{i,j} & \text{si } (i,j) \in R(k)
+\end{cases}
+	\]
+	
+	El valor de $\alpha$ trae los mismos problemas que los presentados en el primer caso. Un ejemplo de las muestras envenenadas para $\alpha=0.2$ aparece en la figura Fig~\ref{fig:backdoor3}, donde se añade un patrón de gafas de sol oscuras en la primera fila y de gafas de sol moradas en la segunda fila. Se ha  experimentado con tres tamaños de cada patrón: pequeño, mediano y grande.
+	
+	\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.5\textwidth]{blended_acces.png}
+    \caption{Escenario objetivo del ataque  con estrategia de inyección de accesorios mezclados propuesto en Chen et al.~\cite{Backdoor}}
+    \label{fig:backdoor3}
+\end{figure}
+	
+\end{itemize}
+
+\subsection*{Ataques de \textit{Trasnfer Learning}}
+
+El \textit{Transfer Learning} es una técnica en el campo del aprendizaje automático en la que un modelo ya entrenada para cierta tarea es reutilizado para otra tarea diferente pero relacionada (por ejemplo, usar la red \textit{Yolo} para detectar rostros, cuando ya está entrenada para detección de otros objetos). Apoyados en este concepto, el trabajo expuesto en Gu et al.~\cite{BadNets} propone una nueva forma de ataque a redes neuronales convolucionales (llamadas \textit{BadNets}). En particular, toman una red neuronal para detección de señales de tráfico estadounidenses y aplican \textit{Transfer Learning} para que detecte señales de tráfico suecas, y se plantea si las muestras envenenadas inyectadas (las muestras backdoor) en el conjunto de entrenamiento de señales estadounidenses persisten tras la transferencia.
+
+Es tomado un modelo de redes neuronales convolucionales entrenado con muestras backdoor de señales estadounidenses y se reentrena con las señales suecas (sin que en el nuevo conjunto de entrenamiento haya muestras backdoor), aumentando el número de capas totalmente conectadas (entrenadas desde cero) dado que mientras que las señales estadounidenses tienen tres categorías, las suecas tienen cinco. Tras este proceso, se realiza la fase de test con imágenes de señales suecas backdoor y con imágenes limpias, argumentando que el ataque será exitoso si la nueva red tiene alta precisión en la predicción de imágenes limpias y baja en las muestras backdoor (comparando estos resultados con otra red que se reentrena usando una red entrenada con datos limpios). La razón de que una alta precisión en imágenes limpias sea sinónimo de éxito se debe a que el ataque backdoor previo (en el conjunto de señales estadounidenses) y los daños ocasionados se han ocultado con éxito.
+
+Una imagen que ilustra la situación es la figura Fig~\ref{fig:badnet1}.
+
+	\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.5\textwidth]{badnet1_senales.png}
+    \caption{Escenario objetivo del ataque backdoor mediante \textit{Transfer Learning} propuesto en Gu et al.~\cite{BadNets}}
+    \label{fig:badnet1}
+\end{figure}
+
+Tras experimentar con sendas redes nombradas, los resultados recogidos en el trabajo mencionado indican que la precisión en las imágenes limpias de la red reentrenada de la red entrenada con muestras backdoor de señales estadounidenses es, en media, ligeramente mayor que la de la red entrenada con un conjunto limpio de imágenes de señales suecas. Además, la precisión en la detección de imágenes manipuladas es, en media, ligeramente menor en el modelo reentrenado. Por lo tanto, se ha confirmado experimentalmente que los daños causados por ataques backdoor en una red neuronal se mantienen por \textit{Transfer Learning}, pudiendo engañar a los desarrolladores de ser incluso mejor que una red entrenada desde cero con un conjunto limpio.
+
+\subsection*{Redes generativas adversario (GAN)}
+
+Para acabar la sección de ataques causativos, es interesante nombrar a las redes generativas adversario, propuestas como herramienta de ataque a otras redes en Goodfellow et al.~\cite{GAN}. A grandes rasgos, son usadas para la creación de muestras envenenadas para el entrenamiento de la red neuronal.
+
+El objetivo es entrenar cierto modelo generativo, $G$, que capture la distribución de los datos de cierto conjunto de entrenamiento, y un modelo discriminante, $D$, que estime la probabilidad de que una muestra generada por $G$ pertenezca a cierta distribución. Si el entrenamiento ha sido bueno, $G$ podrá generar muestras que no sean identificadas correctamente por $D$. Esto es, si $G$ genera una muestra que aparente ser una muestra limpia del conjunto de entrenamiento, el entrenamiento habrá sido bueno y el modelo generativo creará buenas muestras envenenadas para inyectar en el entrenamiento del modelo objetivo.
+
+Formalmente, si $x$ son los datos de entrenamiento, se querrá aprender la distribución del modelo generativo $p_g$ sobre $x$, suponiendo que una distribución genera ruido en la entrada del generador. Además, se supone que $G(z;\theta_g)$ es una parametrización del espacio de datos, con $G$ diferenciable y representada como un perceptrón multicapa de parámetros $\theta_g$. Se define también el segundo perceptrón multicapa $D(x;\theta_d)$, cuya salida es un escalar. Entonces $D(x)$ es la probabilidad de que $x$ pertenezca a una distribución distinta de $p_g$.
+
+En el entrenamiento de $D$ se busca maximizar la probabilidad de que se asigna una etiqueta correcta tanto a los datos de entrenamiento como a las muestras de $G$. También se busca entrenar a $G$ para que minimice $ln(1-D(G(z)))$. En otras palabras, $D$ y $G$ juegan al siguiente juego minimax de dos jugadores:
+
+\begin{align}
+\min_G \max_D V(D,G) = \mathbb{E}_{x \sim p_{data}(x)} \left[ ln(D(x)) \right] + \mathbb{E}_{z \sim p_z(z)} \left[ ln(1-D(G(z))) \right]
+\end{align}
+
+Los resultados teóricos correspondientes se pueden encontrar en Goodfellow et al.~\cite{GAN}.
+
+Los autores realizan una serie de experimentos conjuntos de datos tales como $MNIST$, $TFD$ y $CIFAR-10$. Además, $G$ usa tanto funciones de activación lineales como sigmoides, mientras que $D$ usa activaciones maxout y capas dropout. Las muestras generadas para un conjunto como $MNIST$ aparecen marcadas en la figura Fig~\ref{fig:GAN_MNIST} , demostrando que $G$ no memoriza el conjunto de entrenamiento y genera buenas muestras envenenadas.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.5\textwidth]{GAN_MNIST.png}
+    \caption{Muestras envenenadas generadas por GAN, obtenida en Goodfellow et al.~\cite{GAN}}
+    \label{fig:GAN_MNIST}
+\end{figure}
+
+Algunas desventajas del uso de GAN expuestras en el trabajo puede ser que podría no existir una representación forma de $p_g$ para ciertos datos $x$. Además, si se descuida la sincronización en los entrenamientos de $G$ y $D$, si $G$ se entrena demasiado respecto a $D$ puede ocurrir que relacione muchos valores con un mismo valor, reduciendo la diversidad y afectando a la capacidad del modelo para representar la distribución de datos del conjunto de entrenamiento.
+
+Por otro lado, presentan varias ventajas desde el punto de vista del cómputo. Por ejemplo, $G$ se entrena según el gradiente de $D$, sin necesidad de usar los datos de entrenamiento. Además, mientras otros modelos generativos se basan en el uso de cadenas de Markov, GAN no las necesita, reduciendo el coste computacional de generar muestras y eliminando los problemas que puede acarrear el uso de cadenas de Markov.
+
+%\subsection{Modelos generativos}
+
+\section{Algunas defensas frente ataques causativos}
+
+Tras haber expuesto algunos de los ataques más comunes dentro de la categoría de ataques causativos, se puede comprobar que muchos ataques tienen una metodología común: inyectar muestras envenenadas en el conjunto de entrenamiento de una red neuronal. La complejidad del ataque (solo hacer fallar a la red o que clasifique de determinana forma, si se conoce o no la red objetivo,...) puede variar.
+
+Conocer las posibles formas de ataque a una red neuronal da lugar a pensar en formas de mitigar los daños causados, o directamente detectar las muestras malignas para retirarlas del conjunto de entrenamiento. Sin embargo, no es fácil, ya que como se argumentó en el ataque basado en \textit{Trasnfer Learning}, los atacantes buscan evitar la detección de las muestras envenenadas o evitar que se descubra que un modelo ha sido entrenado con muestras envenenadas y no es fiable. Por ello, se han desarrollado varios métodos de defensa frente a estas situaciones, de los cuales en la presente memoria se expondrán solo un pequeño abanico.
+
+\subsection*{Aprendizaje semisupervisado}
+
+Los presentes algoritmos corresponden a la detección de muestras envenenadas en un conjunto de entrenamiento. Tanto el desarrollo, justificación y resultados se exponen en Taheri et al.~\cite{Clustering}, centrándose en los ataques de cambio de etiqueta (un caso especial de ataque por envenenamiento) y proponiendo métodos de detección basados en aprendizaje semisupervisado. Los experientos se orientan a redes neuronales convolucionales, aunque se podrían generalizar a redes neuronales profundas, haciendo los ajustes necesarios en función del problema.
+
+El algoritmo \textit{Label-based Semi-supervised Learning} (LSD) tiene como objetivo encontrar muestras en el conjunto de entrenamiento tales que podrían tener los valores correctos en un conjunto de entrenamiento formado por muestras envenenadas. Por lo tanto, es necesario tomar esos datos y sus etiquetas e introducirlos en un algoritmo de aprendizaje semisupervisado. Primero se crea un conjunto de validación para monitorear el entrenamiento, con la selección de los hiperparámetros adecuados, de tal manera que se puntuan todos los puntos en función de cada clase y después se propagan las puntuaciones más altas. Por último, se entrena un algoritmo de clasificación binaria para detectar muestras envenenadas y se clasifican todos los puntos del conjunto de entrenamiento original como envenenado o no envenenado.
+
+De manera más formal, se utilizan los algoritmos \textit{Label Propagation} (LP) y \textit{Label Spreading} (LS), implementando el siguiente pseudocódigo (Alg~\ref{alg:lsd}):
+
+\begin{algorithm}
+\caption{LSD}\label{alg:lsd}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{$X_{\text{test}}$, $Y_{\text{test}}$, $X_{\text{entrenamiento}}$, $Y_{\text{entrenamiento}}^{\text{envenenado}}$}
+\Output{$Y_{\text{corregido}}$}
+\BlankLine
+$X \leftarrow X_{\text{entrenamiento}}$\;
+$Y \leftarrow Y_{\text{test}}$\;
+$M_s \leftarrow$ Crear modelo usando LS\;
+Entrenar $M_s$ con $X$ y $Y$\;
+$L_s \leftarrow$ Predecir $X_{\text{entrenamiento}}$ usando $M_s$\;
+$M_p \leftarrow$ Crear modelo usando LP\;
+Entrenar $M_p$ en $X$ y $Y$\;
+$L_p \leftarrow$ Predecir $X_{\text{entrenamiento}}$ usando $M_p$\;
+$M_{\text{f}} \leftarrow$ Crear modelo de red convolucional\;
+$L_{\text{f}} \leftarrow$ Predecir $X_{\text{entrenamiento}}$ usando $M_{\text{f}}$\;
+$Y_{\text{corregido}} \leftarrow$ Votar($Y_{\text{corregido}}$, $L_s$, $L_p$, $L_{\text{f}}$)\;
+\Return{$Y_{\text{corregido}}$}
+\end{algorithm}
+
+El otro algoritmo propuesto en relación al aprendizaje semisupervisado es \textit{Clustering-based Semi-supervised Defense} (CSD). La idea principal detrás de este algoritmo es usar algoritmos de clustering para corregir etiquetas manipuladas. Además, son usados varios índices:
+
+\begin{itemize}
+	\item \textit{Rand Index} (RI): Índice  usado para calcular la similitud entre dos clústeres. Su valor está en el intervalo $[0,1]$, siendo $0$ un indicador de que dos clústeres no tienen puntos en común y $1$ que son iguales. Es una métrica de precisión entre dos conjuntos de puntos, formalmente, la probabilidad de que dos puntos seleccionados aleatoriamente pertenezcan a un mismo clúster.
+	
+	\item \textit{Mutual Information} (MI): Es una medida utilizada para medir la cantidad de información y la dependencia entre dos variables separadas cuando se observan. Si $X_1$ y $X_2$ son dos variables aleatorias, se podría calcular como:
+	
+	$$\mathcal{I}(X_1,X_2) = \sum_{x_1 \in X_1} \sum_{x_2 \in X_2} p_{(X_1,X_2)}(x_1,x_2) \cdot log_2 \left( \frac{p_{(X_1,X_2)}(x_1,x_2)}{p_{X_1}(x_1) \cdot p_{X_2}(x_2)} \right)$$
+	
+	donde $p_{(X_1,X_2)}$ es la función de masa de probabilidad de $(X_1,X_2)$ y $p_{X_i}$ las respectivas funciones de masa de probabilidad marginales, para $i=1,2$.
+	
+	\item \textit{Homogeneity Metric} (HM): Esta métrica es usada para validar puntos que son miembros de una sola clase. Es independiente al cambio de puntuaciones cuando se permuta una clase o etiqueta. Se define como
+	
+	$$\mathcal{HM} = 1 - \frac{H(Y_T | Y_{PR})}{H(Y_T)}$$
+	
+	con valores en $[0,1]$, y si $Y$ es un conjunto de datos, entonces $Y_{PR}$ y $Y_T$ son, respectivamente, los valores predichos y correctos para una muestra. Además, $H(Y_T)$ es el valor de la métrica para muestras cuando son predichas correctamente. Un menor valor de esta métrica implica baja homogeneidad. Por otro lado, $\frac{H(Y_T | Y_{PR})}{H(Y_T)}$ indica que una muestra predicha no ha sido colocada de manera correcta en su clase. Por ende, se busca aproximar $\mathcal{HM}$ a $1$.
+	
+	\item \textit{Fowlkes-Mallows Index} (FMI): El uso de esta métrica se justifica debido a que mide correctamente la similitud entre dos clústeres generados.
+\end{itemize}
+
+El pseudocódigo correspondiente aparece en  Alg~\ref{alg:csd}.
+
+\begin{algorithm}
+\caption{CSD}\label{alg:csd}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{$X_{\text{test}}$, $Y_{\text{test}}$, $X_{\text{entrenamiento}}$, $Y_{\text{entrenamiento}}^{\text{envenenado}}$}
+\Output{$Y_{\text{corregido}}$}
+\BlankLine
+$X \leftarrow X_{\text{test}}$\;
+$M_{\text{f}} \leftarrow$ Creación de un modelo de red convolucional\;
+$Y_{\text{corregido}} \leftarrow$ predecir $X_{\text{entrenamiento}}$ usando $M_{\text{f}}$\;
+$R \leftarrow$ Calcular un índice aleatorio con $X$ e $Y_{\text{corregido}}$\;
+$M \leftarrow$ Calcular MI usando $X$ y $Y_{\text{corregido}}$\;
+$H \leftarrow$ Calcular HM usando $X$ y $Y_{\text{corregido}}$\;
+$F \leftarrow$ Calcular FMI usando $X$ y $Y_{\text{corregido}}$\;
+\For{each fila $\in X_{\text{entrenamiento}}$}{
+    $X_{\text{temp}} \leftarrow X_{\text{test}} + \text{fila}$\;
+    Calcular $R_{\text{temp}}, M_{\text{temp}}, H_{\text{temp}}, F_{\text{temp}}$\;
+    $S \leftarrow |((R_{\text{temp}} - R) + (M_{\text{temp}} - M) + (H_{\text{temp}} - H) + (F_{\text{temp}} - F))|$\;
+    \If{$S \leq 0.1$}{
+        $X \leftarrow X + \text{fila}$\;
+        $Y_{\text{corregido}} \leftarrow Y_{\text{corregido}} + \text{Etiqueta asociada a la fila}$\;
+    }
+}
+\Return{$Y_{\text{corregido}}$}
+\end{algorithm}
+
+
+\subsection*{Agregación finita determinista}
+
+Este método de defensa es una mejora de otro método llamado \textit{Deep Partition Aggregation} (DPA), propuesto en Levine et al.~\cite{DPA}, en el que se utiliza la agregación de clasificadores entrenados en subconjuntos disjuntos de un conjunto de entrenamiento para limitar la sensibilidad a las distorsiones y envenenamiento del conjunto de datos. Se clasificaría como un método \textit{ensemble} (algoritmo obtenido de la concatenación de otros algoritmos). La principal diferencia de DPA con el agregación finita determinista, propuesto en Wang et al.~\cite{AgregFinita} es que este último divide el conjunto de entrenamiento en subconjuntos disjuntos, pero mediante combinatoria genera otros subconjuntos de entrenamiento más grandes (no necesariamente disjuntos) con los que se entrena al conjunto de redes neuronales.
+
+Considérese $\mathcal{X}$ un espacio de muestras sin etiquetar, $\mathcal{C}$ un conjunto de índices para cada clase, $c$, donde un índice de $c$ es $[n_c] = \{0,1,...,n_c - 1\}$. Sea $\mathcal{X}_L$ el espacio de muestras etiquetadas, $\mathcal{X}_L = \{(x,c): x \in \mathcal{X}, c \in \mathcal{C}\}$. Un conjunto de entrenamiento, $D$, de tamaño $n$, se puede ver como un subconjunto de $\mathcal{X}_L$, $\{(x_i,c_i): i=1,...n\} \subset \mathcal{X}_L$. Se escribirá al espacio espacio de conjuntos de entrenamiento como $\mathcal{D}$.
+
+Para algoritmos de clasificación determinista (no hay aleatoriedad en la predicción), $f: \mathcal{D} \times \mathcal{X} \to \mathcal{C}$, el índice de la clase predicha es $f(D,x) \in \mathcal{C}$ para $x \in \mathcal{X}$ y $D \in \mathcal{D}$.
+
+Sean dos conjuntos de entrenamiento, $D$ y $D'$. Se puede medir su diferencia con la siguiente distancia, llamada distancia simétrica (es la cardinalidad de la diferencia simétrica):
+
+$$d_{sym} (D,D') = card((D - D') \cup (D' - D))$$
+
+que para el caso que se expondrá, coincide con el mínimo número de muestras que se necesita insertar o eliminar para cambiar de un conjunto a otro.
+
+Para poder desarrollar correctamente el método propuesto, que a partir de ahora se escribirá como AFD, es necesario exponer ciertos resultados teóricos en los que se basa DPA, en los que se apoya el nuevo método de defensa.
+
+En primer lugar, DPA es un método de clasificación determinista, DPA$: \mathcal{D} \times \mathcal{X} \to \mathcal{D}$, construido mediante un clasificador determinista usado como base, $f_{base}: \mathcal{D} \times \mathcal{X} \to \mathcal{C}$, y una función hash, $h: \mathcal{X}_L \to [k]$, que hace corresponder a cada muestra etiquetada a enteros entre $0$ y $k-1$, donde $k$ es el hiperparámetro que determina el número de particiones. DPA se construye como
+
+$$\text{DPA}(D,x) = \arg \max_{c \in \mathcal{C}} \sum_{i=1}^{k-1} \mathbb{1} \left( f_{base}(P_i,x) = c \right)$$
+
+donde $P_i = \{(x,c) \in D : h(x,c)=i\}$ es una partición del conjunto de entrenamiento y $\mathbb{1} \left( f_{base}(P_i,x) = c \right)$ vale $1$ si se cumple el argumento y $0$ en otro caso.% A partir de ahora, DPA$(D,x)_c = \frac{1}{k} \cdot \sum_{i=1}^{k-1} \mathbb{1} \left( f_{base}(P_i,x) = c \right)$.
+
+Ya se está en condiciones de exponer los resultados teóricos en los que se apoya AFD. Para ello, considérese los siguientes elementos:
+
+\begin{itemize}
+	\item Un clasificador determinista, que será la base del método, $f_{base}: \mathcal{D} \times \mathcal{X} \to \mathcal{C}$.
+	
+	\item Una función hash, $h_{split}: \mathcal{X}_L \to [k \cdot d]$ donde $k \cdot d$ es el número de particiones.
+	
+	\item Una función hash balanceada, $h_{spread}: [k \cdot d] \to [k \cdot d]^d$, que hace corresponder cada entero entre $0$ y $kd-1$ a un conjunto de enteros, que será usado para la propagación de las muestras de entrenamiento, pudiendo ser utilizadas por $d$ clasificadores base diferentes.
+\end{itemize}
+
+Se ha considerado a $k$ como la inversa de la sensibilidad del modelo y $d$ el grado de propagación, que controla a la cantidad de clasificadores que podrán usar cada muestra.
+
+La inversa de la función hash balanceada se escribe como $h_{spread}^{-1} (i) = \{j \in [k \cdot d] : i \in h_{spread}(j)\}$, que cumple $card(h_{spread}^{-1} (i)) = d$ para todo $i \in [k \cdot d]$. A efectos prácticos, la elección de cada función viene explicada en el apartado $3$ en Wang et al.~\cite{AgregFinita} (por ejemplo, la elección de un $h_{spread}$ balanceada realizada es  $h_{spread} (j) = \{(j+r_t) \text{ mód } k \cdot d: t\in [d]\}$, donde se considera $R=\{r_0,...,r_{d-1}\} \subset [k \cdot d]$ un subconjunto generado de forma pseudoaleatoria).
+
+\begin{definicion} (Clasificación con AFD)
+
+El método AFD se construye como FA$: \mathcal{D} \times \mathcal{X} \to \mathcal{C}$, cuya expresión es:
+
+$$\text{FA}(D,x) = \arg \max_{c \in \mathcal{X}} \sum_{i=0}^{k \cdot d - 1} \mathbb{1} \left( f_{base}(S_i,x)=c \right)$$
+
+donde $S_i = \bigcup_{j \in h_{spread}^{-1} (i)} P_j$ para $P_j = \{(x,c) \in D : h_{split}(x,c) = j\}$. El algoritmo desempata tomando el índice de la clase más pequeña.
+\end{definicion}
+
+Se escribe AFD$(D,x)_c$ a la media de los votos contados, $\frac{1}{k \cdot d} \sum_{i=0}^{k \cdot d - 1} \mathbb{1} \left( f_{base}(S_i,x) = c \right)$, y para los clasificadores que usan la partición $P_j$, se escribirá la media de sus votos contados, $\frac{1}{d} \sum_{i \in h_{spread} (j)} \mathbb{1} \left( f_{base}(S_i,x) = c \right)$, como AFD$(D,x)_{c|j}$.
+
+A grandes rasgos, los pasos que sigue el método son los siguientes:
+
+\begin{itemize}
+	\item Separación: Separar el conjunto de entrenamiento en $k \cdot d$ particiones.
+	
+	\item Propagación: Cada partición es propagada hacia $d$ diferentes destintos, escritos como $S_0,...,S_{k \cdot d -1}$.
+	
+	\item Agregación: Un clasificador es entrenado con cada $S_i$ para todo $i \in [k \cdot d]$, y el voto mayoritario de todos los $k \cdot d$ clasificadores será la predicción.
+\end{itemize}
+
+El esquema general del proceso se pueden encontrar en la figura Fig.~\ref{fig:afd_proc}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{AFD_proceso.png}
+    \caption{Resumen gráfico del método AFD para $k=d=3$. Imagen extraida de Wang et al.~\cite{AgregFinita}}
+    \label{fig:afd_proc}
+\end{figure}
+
+Finalmente, el siguiente teorema demuestra que AFD ofrece garantías de mejora en la mitigación de los daños ocasionados por ataques de envenenamiento, incluso mejores que DPA.
+
+\begin{teorema} (Robustez de AFD frente ataques de envenenamiento)
+
+Sea $D$ un conjunto de entrenamiento, $x$ una entrada y $c = \text{AFD}(D,x)$. Entonces, para cualquier conjunto de entrenamiento $D'$, se cumple $\text{AFD}(D',x)=\text{AFD}(D,x)$ si 
+
+$$\frac{1}{k} \cdot \delta_{D,x}^{\bar{d_{sym}(D,D')}} \leq \text{AFD} (D,x)_c - \text{AFD}_{c'} - \frac{\mathbb{1} \left( c' < c \right)}{k \cdot d}$$
+
+para todo $c' \neq c$, donde $\delta_{D,x}$ es el multiconjunto definido como 
+
+$$\{1 + \text{AFD}(D,x)_{c|j} - \text{AFD}(D,x)_{c' | j}\ : j \in [k \cdot d] \}$$
+
+y $\delta_{D,x}^{\bar{d_{sym}(D,D')}}$ es la suma de los $d_{sym}(D,D')$ mayores elementos de $\delta_{D,x}$.
+
+\end{teorema}
+
+\section{Ataques exploratorios}`
+
+Los ataques exploratorios forman otra categoría crucial dentro del aprendizaje adversario, en la que los ataques se enfocan en sistemas ya entrenados y que estén en fase de inferencia o funcionando en aplicaciones usadas por otros usuarios. A diferencia de los ataques causativos, estos ataques aprovechan las vulnerabilidades existentes en modelos entrenados para extraer información sensible, manipular el comportamiento o inducir a decisiones erróneas (en la fase de test).
+
+Los mencionados ataques se centran en la explotación de la capacidad predictiva (o generativa) del modelo, donde los atacantes elaboran entradas específicas para llevar al fallo al algoritmo. Estas vulnerabilidades presentan serios desafios para la seguridad, sobre todo en aplicaciones de reconocimiento facial, diagnósticos médicos y sistemas de recomendación.
+
+A lo largo de este apartado se detallarán las técnicas más importantes para la creación de ataques exploratorios, desde un contexto en el que se conoce información del modelo hasta uno en el que la misma es muy escasa. Se mencionarán las medidas de defensa desarrolladas, como aquellos que buscan aumentar la resiliencia de los modelos. Si un profesional consigue entender estos métodos (tanto de ataque como defensa), será capaz de elaborar algoritmos más complejos y robustos para mitigar el daño de estos ataques.
+
+\subsection{Modelos predictivos}
+
+Los modelos de redes neuronales, al igual que otros algoritmos, surgen tras la aplicación de varias técnicas estadísticas con el objetivo de hacer predicciones bajo cierta fiabilidad. En primer lugar, se exponen algunos de los ataques exploratorios a modelos cuyo objetivo es predecir la asociación de un dato, que entra a la red, con su etiqueta o valor correspondiente. Son importantes en campos como la medicina (diagnóstico de enfermedades), las finanzas (prevención de precios en mercados) o marketing (predicción del comportamiento del cliente para ciertas campañas).
+
+\subsection*{Ataque FGSM}
+
+La técnica de ataque FGSM (\textit{Fast Gradient Sign Attack}) fue propuesta en Goodfellow et al.~\cite{GoodfLAdvers}. Podría incluirse en la categoría de ataques de caja blanca (se conoce el modelo y el conjunto de entrenamiento), aunque a veces también es aplicable en ataques de caja negra. Especialmente orientado a redes neuronales convolucionales para clasificación de imágenes, genera perturbaciones en los datos en la entrada de la red usando gradiente descendente, con la particularidad de aplicarlo en sentido opuesto al del gradiente empleado en el entrenamiento. El objetivo es, simplemente, hacer fallar a la red en la fase de test. La generación de la imagen perturbada se realiza aplicando la siguiente expresión
+
+$$X_{adv} = X + \epsilon \cdot sgn(\nabla_X \mathcal{L}(X,Y))$$
+
+En general, se usa el signo de la matriz jacobiana de la función de coste para generar la nueva imagen, siendo $X$ la imagen limpia e $Y$ su etiqueta. El hiperparámetro más importante es $\epsilon \in [0,1]$. Si $\epsilon = 0$, $X_{adv}=X$, sería el caso ideal. Sin embargo, en los casos prácticos, es conveniente tomar un $\epsilon$ suficientemente pequeño, pues a mayor valor, mayor será la probabilidad de que se detecte la imagen perturbada y el ataque falle. Se busca perturbar muestras lo más cercanas posibles a las fronteras de decisión (un ejemplo práctico aparece en la figura Fig~\ref{fig:fgsm_frontera}).
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.6\textwidth]{fgsm_frontera.png}
+    \caption{Situación objetivo en un ataque FGSM. Imagen extraida de Orellana et al.~\cite{RodrigoTFM}}
+    \label{fig:fgsm_frontera}
+\end{figure}
+
+%Por último, un ataque FGSM realizado a una red neuronal convolucional cuya tarea es clasificar números, habiendo sido entrenada con los datos en MNIST, dio como resultados los expuestos en la figura Fig~\ref{fig:mnist_fgsm} para distintos valores de $\epsilon$.
+
+%\begin{figure}[h]
+%    \centering
+%    \includegraphics[width=0.8\textwidth]{mnist_fgsm.png}
+%    \caption{Experimento de ataque FGSM a una red con datos de MNIST. }
+%    \label{fig:mnist_fgsm}
+%\end{figure}
+
+\subsection*{Ataque L-BFGS}
+
+En Szegedy et al.~\cite{DataManifold} se empezó a plantear el término de ejemplos adversario, presentándolos formalmente como la solución al siguiente problema:
+
+$$\arg \min_{r} f(x+r) = l \text{ subject to }(x+r) \in D$$
+
+donde $f$ es un clasificador. $x$ una muestra limpia y $r$ el ruido que debe añadirse a $x$ de tal manera que $f$ lo clasifique como $l$, la etiqueta incorrecta. El autor plantea el uso del método de optimización L-BFGS para encontrar $r$, mediante el uso de gradiente descendente. La principal diferencia con FGSM es que en L-BFGS se usa la matriz del jacobiano del clasificador, mientras que en FGSM solo se tiene en cuenta el signo de cada elemento de la matriz jacobiana de $\mathcal{L}$.
+
+\subsection*{Búsqueda local adversaria}
+
+Para poder realizar ataques a redes neuronales, es normal no conocer el modelo objetivo o el conjunto de datos sobre el que se ha entrenado. Por ello, los anteriores ataques (FGSM y L-BFGS) pueden no ser muy llamativos en la práctica. En estas situaciones, es preferible usar ataques donde la cantidad necesaria de conocimiento sobre lo que se va a atacar es mínima o nula.
+
+En Narodytska et al.~\cite{LocalSearchAdv} se plantea el uso de algoritmo de búsqueda local para la creación de ejemplos adversario, siendo solo necesario conocer la tarea para la que se ha entrenado la red (los autores experimentan sobre una red neuronal convolucional que clasifica imágenes, habiendo sido entrenada con los datos recogidos en MNIST, CIFAR10, SVHN, STL10 e ImageNet1000). 
+
+Primero es demostrado que el hecho de cambiar un único píxel en una imagen puede acarrear fallos en la fase de test. Sin embargo, esto puede no ser interesante, ya que alterar un píxel de una imagen de forma aleatoria, intuyendo que en algún momento el clasificador fallará, podría ser incluso un peor método que L-BFGS. Más adelante, basados en la idea de que cambiar ciertos píxeles en la imagen de forma no aleatoria puede hacer fallar a la red, los autores plantean una aproximación Greedy mediante el uso de búsqueda local de ataque de caja negra (mínima conocimiento del objetivo).
+
+Considérense $LB$ y $UB$ dos constantes tales que las coordenadas normalizadas de todos los píxeles de las imágenes caen en $[LB,UB]$ (generalmente $LB < 0$ y $UB > 0$). En el estudio de los autores, se expuso cierto algoritmo con el que se haría el cambio de valor en el píxel en función de la perturbación necesaria. Esto acarrea un problema: la perturbación puede ser tal que el valor del pixel acabe fuera de $[LB,UB]$. Para solucionar este problema, se deben hacer ciertas definiciones hasta plantear la búsqueda local propuesta para generar ejemplos adversario. Se construyen entonces los siguientes elementos:
+
+\begin{itemize}
+	\item Función objetivo: Sea $I$ una imagen (se cambia la notación por ahora para evitar un abuso de lenguaje) y su etiqueta $c$. Para cualquier imagen de entrada $\hat{I}$, se define la función objetivo, $g_c(\hat{I})$, como
+	
+	$$g_c(\hat{I}) = p_c$$
+	
+	que es la probabilidad asignada por la red neuronal de que $\hat{I}$ clasifique como $c$. El objetivo será minimizar el valor de la función.
+	
+	\item Vecindario: Sea $I_{i-1}$ es la imagen obtenida en la iteración $i-1$. Un vecindario en la iteración $i$ constará de imágenes formadas tras cambiar un píxel de $I_{i-1}$.
+	
+	\item Mutación: Se considera $(P_X,P_Y)_i$ el conjunto de localizaciones de los píxeles, definida de la manera
+	
+	$$(P_X,P_Y)_i = \bigcup_{\{(a,b) \in (P_X^*,P_Y^*)_{i-1}\}} \bigcup_{I \in [a-d,a+d], y \in [b-d,b+d]} (x,y)$$
+	
+	donde $d$ es un hiperparámetro y $(P_X^*,P_Y^*)_{i-1}$ son las localizaciones de los píxeles perturbados en la iteración $i-1$. La mutación, escrita como $m$, toma una imagen , el conjunto $(P_X,P_Y)$, un parámetro $t$ que define la forma de mutar de $m$, y dos parámetros de perturbación $p$ y $r$, y devuelve una imagen con $t$ píxeles perturbados. Formalmente, $m$ construye el siguiente conjunto de imágenes perturbadas
+	
+	$$\mathcal{I} = \bigcup_{(x,y) \in (P_X,P_Y)_{i-1}} \{\text{PERT}(\hat{I}_{i-1},p,(x,y))\}$$
+	
+	donde PERT es una función que toma una imagen, una localización $(x,y)$ y $p \in \mathbb{R}$ parámetro para la perturbación, y devuelve la imagen perturbada.
+
+\end{itemize}
+
+De forma más explícita, la perturbación se genera mediante con el pseudocódigo Alg~\ref{alg:cyclic} (teniendo en cuenta que los datos sobre los que se trabaja son imágenes):
+
+\begin{algorithm}
+\caption{Cyclic}\label{alg:cyclic}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{Parámetro de perturbación $r \in [0, 2]$, $b$, $x$, $y$}
+%\Assumption{$LB \leq 0 \leq UB$}
+\Output{Valor de la imagen perturbada en una posición $(b, x, y)$ que cae en el rango $[LB, UB]$}
+\BlankLine
+\If{$rI(b, x, y) < LB$}{
+    \Return{$rI(b, x, y) + (UB - LB)$}
+}
+\ElseIf{$rI(b, x, y) > UB$}{
+    \Return{$rI(b, x, y) - (UB - LB)$}
+}
+\Else{
+    \Return{$rI(b, x, y)$}
+}
+\end{algorithm}
+
+Finalmente, el pseudocódigo de la búsqueda local para generar ejemplos adversario aparece en Alg~\ref{alg:locsearch}.
+
+\begin{algorithm}
+\caption{LocSearchAdv}\label{alg:locsearch}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{Imagen $I$ con etiqueta verdadera $c$, dos parámetros de perturbación $p \in \mathbb{R}$ and $r \in [0, 2]$, y cuatro parámetros: mitad de la longitud del cuadrado del vecindario $d \in \mathbb{N}$, número de píxeles perturbados en cada iteración $t \in \mathbb{N}$, el límite $k \in \mathbb{N}$ para el fallo de clasificación, y el máximo de iteraciones $R \in \mathbb{N}$.}
+\Output{Éxito/Fracaso en función de si el algoritmo encuentra la imagen perturbada}
+\BlankLine
+$\hat{I}_0 = I$, $i = 1$\;
+Tomar el 10\% de localizaciones de píxeles en $I$ aleatoriamente $(P_X, P_Y)_0$\;
+\While{$i \leq R$}{
+    \tcp{Calcular $g$ usando el vecindario}
+    $S_I \leftarrow \{ (x,y) \in (P_X, P_Y)_{i-1} : \text{Pert}( \hat{I}_{i-1}, p, x, y) \}$\;
+    Calcular $f_c (I)$ para cada $\tilde{I} \in S_I$ (donde $f_c (I) = p_c$\;
+    sorted($I$) $\leftarrow$ imágenes en $I$ ordenado en orden decreciente según su valor en la función objetivo\;
+    $(P_X^*, P_Y^*)_i \leftarrow \{(x, y) : \text{Pert}(\hat{I}_{i-1}, p, x, y) \in \text{sorted}(I)[1 : t]\}$ (con relaciones rotas aleatoriamente)\;
+    \tcp{Generación de la imagen adversaria $\hat{I}_i$}
+    \For{$(x, y) \in (P_X^*, P_Y^*)_i$ \textbf{and} para cada $b$}{
+        $\hat{I}_i (b, x, y) \leftarrow \text{Cyclic}(r, b, x, y)$\;
+    }
+    \tcp{Comprobar si la imagen perturbada $\hat{I}_i$ es una imagen adversaria}
+    \If{$c(I) \notin \pi(NN(\hat{I}_i), k)$}{
+        \Return{Éxito}
+    }
+    \tcp{Actualizar un vecindario de píxeles para la próxima iteración}
+    $(P_X, P_Y)_i \leftarrow \{ (a,b) \in (P_X^*, P_Y^*)_{i-1} : x \in [a-d,a+d], y \in [b-d,b+d] \}$\;
+    $i \leftarrow i + 1$\;
+}
+\Return{Fallo}
+\end{algorithm}
+
+
+\subsection*{Algoritmo RGF en ataques de caja negra etiquetados}
+
+El algoritmo RGF (\textit{Randomized Gradient-Free}) es un enfoque de optimización que no usa gradientes para encontrar óptimos en problemas de aprendizaje automático. Es muy útil en contextos en los que el cálculo del gradiente es difícil o imposible.
+
+En Chen et al.~\cite{RGF} se plantea una forma de ataque a modelos de redes neuronales profundas suponiendo que solo se pueden hacer consultas al modelo y no se tiene más información del mismo, apoyados en el algoritmo RGF (pues no se conoce el gradiente del modelo). El atacante solo recibe la predicción hecha por el modelo y no las probabilidades de salida (por ejemplo, si el modelo objetivo es una red neuronal convolucional para clasificación, solo recibe la etiqueta predicha para la consulta que realice). El trabajo desarrollado se basa, por simplicidad, en un modelo de clasificación multietiqueta,$f:\mathbb{R}^n \to \{1,...K\}$, para $K$ etiquetas, aunque se puede generalizar a otras tareas.
+
+Dado que el problema enfrentado es de optimización en el contexto de ataques etiquetados para cierta etiqueta $t$, la función objetivo sería
+
+$$g(\theta) = \arg \min_{\lambda > 0} \left( f(x_0 + \lambda \frac{\theta}{\|\theta\|}) = t \right)$$
+
+siendo $\theta$ la dirección de búsqueda y $g(\theta)$ la distancia de $x_0$, la entrada limpia, al ejemplo adversario más próximo según la dirección $\theta$. El problema planteado es encontrar
+
+$$\theta^* = \min_{\theta} g(\theta)$$
+
+y el ejemplo adversario se creará simplemente sustituyendo en $x^* = x_0 + g(\theta^*) \frac{\theta^*}{\|\theta^*\|}$
+
+El primer inconveniente es la forma de evaluar $g$. Los autores muestran el pseudocódigo de evaluación para ataques no etiquetados, pero los realmente interesantes son los etiquetados, cuyo proceso es similar: para cierto $\theta$ a evaluar, primero se hace una exploración de alto nivel de detalle y precisión del espacio de soluciones (búsqueda \textit{fine-grained}) y a continuación se aplica búsqueda binaria. Los detalles pueden ser encontrados en Chen et al.~\cite{RGF}.
+
+Resuelta la evaluación de $g$, los autores proponen el uso de RGF por suponer que no se conoce el gradiente del modelo objetivo (optimización de orden cero). En cada consulta o iteración, el gradiente se estima como
+
+$$\hat{g} = \frac{g(\theta + \beta u) - g(\theta)}{\beta} \cdot u$$
+
+donde $u$ es un vector de variables aleatorias que siguen una normal estándar y $\beta > 0$ es el parámetro asociado al ruido. Así, la actualización por iteración de $\theta$ es $\theta \gets \theta - \eta \hat{g}$ donde $\eta$ es la tasa de aprendizaje.
+
+El pseudocódigo que representa los pasos a seguir para encontrar la perturbación del dato se expone en Alg~\ref{alg:rgf}.
+
+\begin{algorithm}
+\caption{RGF para ataques de caja negra etiquetados}\label{alg:rgf}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{Modelo objetivo $f$, imagen limpia $x_0$, inicialización $\theta_0$}
+\Output{$x_0 + g(\theta_T)\theta_T$}
+\BlankLine
+\For{$t = 0, 1, 2, \ldots, T$}{
+    Escoger aleatoriamente $u_t$ de una normal estándar\;
+    Evaluar $g(\theta_t)$ and $g(\theta_t + \beta u)$ como es indicado anteriormente\;
+    Calcular $\hat{g} = \frac{g(\theta_t + \beta u) - g(\theta_t)}{\beta} \cdot u$\;
+    Actualizar $\theta_{t+1} = \theta_t - \eta_t \hat{g}$\;
+}
+\Return{$x_0 + g(\theta_T)\theta_T$}
+\end{algorithm}
+
+En Nesterov et al.~\cite{RGF_FREE} se prueba que RGF en el algoritmo propuesto requiere como mucho de $O \left( \frac{d}{\delta^2} \right)$ iteraciones para converger, con $\| \nabla g(\theta)\|^2 \leq \delta^2$. Sin embargo, esto es en el caso de que $g$ pueda ser evaluada directamente, y no es el caso. Con el siguiente teorema se incluye el caso de la evaluación aproximada de una función al citado.
+
+\begin{teorema}
+En el algoritmo previo supóngase que $g$ tiene un gradiente continuo y es una función de Lipschitz con constante $L_1$. Si el error de las evaluaciones aproximadas puede ser controlado por ciertos $\epsilon \sim O(\beta \delta^2)$ y $\beta \leq O \left( \frac{\delta}{nL_1} \right)$, entonces para poder cumplirse $\frac{1}{N+1} \sum_{i=0}^N \mathbb{E}_{\mathcal{U}_i} \left[ \| \nabla g(\theta_i)\|^2 \right] \leq \delta^2$, entonces el número de iteraciones debe ser, como mucho, $O \left( \frac{n}{\delta^2} \right)$
+\end{teorema}
+
+\subsection{Modelos generativos}
+
+Los modelos generativos surgen de la mano de los modelos predictivos, con la diferencia de que aplican técnicas distintas. Por ejemplo, algunos modelos generativos básicos son las cadenas de Markov, que evolucionaron hasta el desarrollo de otros modelos estadísticos como las máquinas de Boltzmann o las redes bayesianas. Algunos de los campos en los que se aplican son la generación de imágenes y vídeos, el procesamiento de lenguaje natural o el modelado y simulación.
+
+\subsection*{Inversión de modelo}
+
+Los ataques de inversión de modelo, (GMI, \textit{Generative Model-Inversion}) tienen como objetivo recuperar información con la cual ha sido entrenada la red neuronal que puede ser privada (por ejemplo, si ChatGPT, que es un modelo generativo, fue entrenado con muestras, entre las que se encuentra información sensible sobre el presidente de un país, el objetivo de este ataque es hacer que el modelo devuelva esta información). Fueron propuestos desde un punto de vista práctico en Zhang et al.~\cite{InversionModelo} en el contexto de las redes neuronales profundas, pues son los algoritmos que mejor trabajan en la generación de respuestas, aunque previamente se hicieron otros estudios en los que se hacían ataques GMI en contextos aplicados como la biología (Fredrikson et al.~\cite{ProblBiolGMI}).
+
+El trabajo de los autores se centra en redes orientadas a la creación de imágenes, apoyados en el uso de redes GAN. Se establecen ciertas hipótesis obtenidas de conjuntos de datos públicos y se propone el ataque GMI basado en GAN para la revelación de información existente en el conjunto de entrenamiento.
+
+En primer lugar, se consideran dos redes propias de las GAN: $G$, que será el generador, y $D$, que será el discriminante. El objetivo será encontrar cierto vector (o imagen) $\hat{z}$ que alcance la probabilidad más alta en la red objetivo mientras se cumplen las restricciones. Se entrenan tanto al generador como al discriminante en conjuntos de datos públicos para conseguir generar imágenes realistas. A continuación, se usa el generador para resolver un problema de optimización: recuperar ciertas regiones sensibles de una imagen.
+
+Si se da la situación de tener más información del modelo objetivo (como una versión corrupta de la imagen privada), se usa para mejorar el funcionamiento del generador, usando dos discriminadores en lugar de uno: uno para evaluar la imagen en su totalidad (discriminador global) y otro para evaluar localmente la imagen según la información disponible (discriminador local).
+
+La descripción gráfica de los pasos propuestos aparecen en la figura Fig~\ref{fig:pasos_gmi}, donde las funciones pérdida indicadas son definidas de la siguiente forma:
+
+\begin{itemize}
+	\item Función pérdida \textit{prior}: Penaliza imágenes no realistas. Su expresión es
+	
+	$$ \mathcal{L}_{prior} (z) = - D(G(z))$$
+	
+	\item Función pérdida \textit{id}: Ayuda a que el generador cree imágenes con alta probabilidad en la red objetivo. Su expresión es
+	
+	$$ \mathcal{L}_{id}(z) = - ln \left( p_{G(z)} \right)$$
+	
+	siendo $p_{G(z)}$ la probabilidad que la red prediga $G(z)$.
+	
+\end{itemize}
+
+y, si $F$ es el extractor de características de la red objetivo, la función pérdida de diversidad viene dada de la forma
+
+$$\max_{G} \mathcal{L}_{div} (G) = \mathbb{E}_{z_1,z_2} \left[ \frac{\|F(G(z_1)) - F(G(z_2))\|}{\|z_1 - z_2\|} \right]$$
+
+El vector buscado, $\hat{z}$, se expresaría de la forma
+
+$$\hat{z} = \arg \min_{z} \mathcal{L}_{prior} (z) + \lambda \mathcal{L}_{id} (z)$$.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{pasos_gmi.png}
+    \caption{Esquema general de un ataque GMI a una red neuronal convolucional. Imagen extraida de Zhang et al.~\cite{InversionModelo}}
+    \label{fig:pasos_gmi}
+\end{figure}
+
+\subsection*{Prompt injection}
+
+Tal y como se expuso anteriormente, una de las aplicaciones de los modelos generativos es el procesamiento del lenguaje natural y creación de textos. Modelos de generación de texto como ChatGPT están limitados y no pueden dar ciertas respuestas (por ejemplo, "¿cómo crear una bomba nuclear?"). Sin embargo, tras un tiempo en el mercado, se comprobó que estos límites podían ser sobrepasados por un usuario estándar mediante, por ejemplo, la inclusión de otros tópicos dentro de la pregunta para que el modelo no lo considere inapropiado, o incluso introducir comandos para alterar el comportamiento del modelo como en las bases de datos (ejemplo de manipulación de modelo en la figura Fig~\ref{fig:prompt1}, donde se inyecta texto y, en una futura pregunta, el modelo responde lo que aparece en la figura Fig~\ref{fig:prompt2}, mostrando que existe el peligro de engañar un modelo para crear noticias falsas). Estas técnicas son conocidas como \textit{prompt injection}, las cuales son clasificadas en Rossi et al.~\cite{PromptInject} y se resumirán a continuación. Nótese que solo son válidos para modelos LLM dada la naturaleza del ataque.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.6\textwidth]{prompt1.png}
+    \caption{Inyección de texto a un LLM. Imagen obtenida en Greshake et al.~\cite{PromptEjemplo} }
+    \label{fig:prompt1}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.2\textwidth]{prompt2.png}
+    \caption{Respuesta del LLM tras un ataque de inyección. Imagen obtenida en Greshake et al.~\cite{PromptEjemplo}}
+    \label{fig:prompt2}
+\end{figure}
+
+
+Los \textit{prompt injection} directos se refieren a las inyecciones de texto o códigos incluidos como entrada al modelo realizadas por el propio usuario (por ejemplo, la figura Fig~\ref{fig:prompt1} sería inyección directa). El objetivo más más común de este tipo de ataques serían la evasión de medidas de seguridad (por ejemplo, permitir la generación por parte del LLM de discursos de odio, de malware, contenido violento,...). Otro objetivo, aunque menos frecuente, es la revelación del \textit{prompts} inicial del modelo o instrucciones dadas (como sus limitaciones). En el primer caso, otra terminología usada para muchos ataques \textit{prompt injection} directos que buscan vulnerar las limitaciones de un LLM es \textit{jailbreak}. Las subclases de este tipo de ataques, cuyos objetivos suelen ser la creación de contenido malicioso, son:
+
+\begin{itemize}
+	\item Doble caracter: Un \textit{prompt} hace que la LLM produzca una respuesta de doble caracter, estando uno de ellos sujeto a las limitaciones impuestas mientras que el otro no.
+	
+	\item Virtualización: El \textit{prompt} hace que la LLM pase a modo sin restricciones, como un escenario virtual en que puede generar contenido malicioso en una máquina virtual.
+	
+	\item Ofuscación: El contenido malicioso del \textit{prompt} es codificado en, por ejemplo, base$64$.
+	
+	\item División de carga: Estrategia divide y vencerás. Separar el \textit{prompt} malicioso en varios \textit{prompts} más pequeños que no lo son. Después, se reconstruye la respuesta.
+	
+	\item Sufijo adversario: Se añade una combinación aleatoria de caracteres al \textit{prompt} malicioso, sobrepasando las limitaciones del modelo.
+	
+	\item Manipulación de instrucciones: El \textit{prompt} revela instrucciones previas, el \textit{prompt} inicial o consigue que el modelo ignore las restricciones. Además de crear contenido malicioso, otro objetivo de este ataque es alterar el comportamiento del modelo.
+	
+\end{itemize}
+
+Un ejemplo real de \textit{prompt injection} directo es el caso de Bing AI. Cuando fue lanzado el usuario podría pedir que ignorase las instrucciones anteriores y describiese qué había en el documento "de arriba" (el \textit{prompt} inicial), dando datos como el alias del desarrollador del modelo.
+
+Por otro lado, los \textit{prompt injection} indirectos pueden tener varios objetivos, a diferencia de los directos, que estaban orientados a generar contenido malicioso. El contenido generado por el \textit{prompt} no es necesariamente el objetivo principal del atacante. Existen varias subclases, con objetivos distintos:
+
+\begin{itemize}
+	\item Inyecciones activas: Se envían \textit{prompts} maliciosos continuamente al LLM. Se busca robar datos sensibles o alterar el comportamiento del modelo.
+	
+	\item Inyecciones pasivas: Inclusión  de información falsa o maliciosa en las fuentes con las que se entrena al modelo. El objetivo es que el modelo engañe al usuario con información falsa o pueda responder a \textit{prompts} que no cumplen ciertas restricciones.
+	
+	\item Inyecciones dirigidas por el usuario: Uso de \textit{prompts} generados usando ingeniería social. Se busca engañar a otros usuarios con esta ingeniería a través del LLM.
+	
+	\item Inyección de \textit{prompts} virtuales: El atacante manipula las instrucciones de tal manera que en un posible escenario, el comportamiento del modelo sea anómalo y proporcione salidas inadecuadas.
+\end{itemize}
+
+Se observa que el comportamiento de los ataques \textit{prompt injection} indirectos simulan ciberataques a sistemas informáticos.
+
+Un esquema que representa desde un punto de vista más general la clasificación realizada en Rossi et al.~\cite{PromptInject} es la que aparece en la figura Fig~\ref{fig:esquema_prompts}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.6\textwidth]{esquema_prompts.png}
+    \caption{Esquema de la clasificación hecha por los autores. Imagen obtenida en Rossi et al.~\cite{PromptInject}}
+    \label{fig:esquema_prompts}
+\end{figure}
+
+\section{Algunas defensas frente ataques exploratorios}
+
+\subsection*{Evaluación de la robustez. DeepPoly}
+
+Para poder comprobar si un modelo de redes neuronales profundas, es interesante llevar a cabo el desarrollo de un \textit{framework} que evalue la robustez del modelo frente a posibles ataques. Sin embargo, dada la gran variedad de formas de ataque existentes y el escaso desarrollo de matemáticas relacionadas con la robustez de los modelos de redes neuronales, aún no se ha llegado a un algoritmo que evalue de forma completamente fiable la robustez de un modelo.
+
+Pese a no existir tal \textit{framework}, se han realizado avances con los que se busca empezar a evaluar la robustez dado un modelo. En el caso de las redes neuronales profundas, se presenta \textit{DeepFoly}, un método de certificación de redes propuesto en Singh et al.~\cite{DeepFoly}, que tiene en cuenta tanto la precisión como la escalabilidad. La idea principal es abstraer el concepto de red neuronal a un poliedro de puntos flotantes conectados que usa transformadores afines usuales como la función ReLU o la función sigmoide, dando en la práctica un método más fiable que el presentado en Weng et al.~\cite{Certif1}, Gehr et al.~\cite{Certif2} y Singh et al.~\cite{Certif3}. Todos los desarrollos teóricos pueden ser encontrados en el trabajo de los autores.
+
+Una de las situaciones en las que \textit{DeepPoly} evalua la robustez es en el contexto de la rotación de imágenes para redes que trabajen con ellas. Supóngase que se rota una imagen en blanco y negro de tamaño $m \times n$ un ángulo $\theta$. Se puede calcular la intensidad de cada píxel resultante, $R_{i,j}$ calculando primero la posición $(x',y')$ que se asociaría al centro del píxel, pasando por una interpolación lineal (que daría una combinación convexa de píxeles en el vecindario de $(x',y')$).
+
+Si $f$ es una red neuronal que clasifica imágenes obtenidas de la rotación de una sola imagen según $\theta \in [\alpha, \beta] \subset [- \pi, \pi]$, se considera $R$ la región adversario. Se quiere verificar que que $f$ clasifica la rotación en una clase, $k$, induciendo una nueva región adversario, $X' = \{\text{ROTAR}(I,\theta): I \in X, \theta \in [\alpha, \beta] \}$. La robustez del modelo frente rotaciones se puede evaluar obteniendo los límites inferiores y superiores de las intensidades de cada píxel de la imagen rotada , aplicando una interpretación abstracta (Singh et al.~\cite{DeepFoly}) del algoritmo de rotación presentado.
+
+\subsection*{Evaluación de la robustez. Ruido aleatorio}
+
+De nuevo, en el contexto de las redes neuronales convolucionales, se encuentran nuevos métodos de evaluación de robustez. Uno de los mayores problemas cuando se trata con imágenes es la presencia de ruido que pueda alterar el comportamiento del modelo, una situación más natural que la anterior. Por ello, se propone un marco de evaluación más sencillo de este tipo de modelos en Cohen et al.~\cite{CertifRuido}, donde se centran en la presencia de ruido gaussiano en imágenes para la evaluación.
+
+Considérese un problema de clasificación de $\mathbb{R}^n$ a cierto conjunto de etiquetas.  El método propuesto por los autores consiste en construir un nuevo clasificador $g$ a partir de otro $f$, donde dado $x$, el nuevo clasificador devuelve la predicción que haría $f$ si $x$ fuese un ejemplo perturbado con ruido gaussiano. Esto es,
+
+$$g(x) = \arg \max_{c \in \mathcal{C}} \mathbb{P} \left[ f(x + \epsilon) = c \right]$$
+
+donde $\epsilon \sim \mathcal{N} (0,\sigma^2 \cdot I_n)$, siendo $\sigma$ un hiperparámetro que controla la robustez de $g$. Por simplicidad, no se define el comportamiento de $g$ cuando el resultado no es único.
+
+El desarrollo teórico de la garantía de robustez de $g$ puede ser encontrada en Cohen et al.~\cite{CertifRuido}. Dado que no es posible en general evaluar $g$ para cierto $x$ o evaluar su robustez de forma exacta, se apoyan en métodos de Monte Carlo. Por ello, con las hipótesis en test expuestas en Hung et al.~\cite{CertifRuido2} para calcular el límite de abstención tal que $\alpha$ es la cota superior de la probabilidad de que la función predictora (definida en Cohen et al.~\cite{CertifRuido}) devuelva una respuesta correcta. En otras palabras, la función predictora cumple
+
+\begin{proposicion}
+Con probabilidad de al menos $1 - \alpha$ sobre la aleatoriedad de la función predictora (Alg~\ref{alg:predict}), en caso de devolver un valor será $g(x)$. En otras palabras, la probabilidad de que la función predictora devuelva $g(x)$ es de $\alpha$.
+\end{proposicion}
+
+Solucionado el problema de la evaluación de $g$, se puede evaluar la robustez del modelo dado $x$ una imagen de entrada. Definidas las funciones \textit{SAMPLEUNDERNOISE} (añade ruido gaussiano según $\sigma$ a cierto $x$ dado $f$) y \textit{LOWERCONFBOUND} (obitene el límite inferior del intervalo de confianza según $1 - \alpha$ mediante el parámetro $p$ de una distribución binomial y $k \sim B(n,p)$), se presenta el siguiente pseudocódigo (Alg~\ref{alg:certify}) para certificar la robustez de un modelo de clasificación de imágenes, $g$, dada una entrada $x$ (en particular, redes neuronales cuyo objetivo es clasificar imágenes).
+
+\begin{algorithm}
+\caption{PREDICT}\label{alg:predict}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{$f$, $\sigma$, $x$, $n$, $\alpha$}
+\Output{predicción $c$ o ABSTENCIÓN}
+\BlankLine
+counts $\leftarrow$ SAMPLEUNDERNOISE($f$, $x$, $n$, $\sigma$)\;
+$c_1$, $c_2 \leftarrow$ dos mayores índices en counts\;
+$n_1$, $n_2 \leftarrow$ counts[$c_1$], counts[$c_2$]\;
+\If{BINOMPVALUE($n_1$, $n_1 + $ $n_2$, 0.5) $\leq \alpha$}{
+    \Return{$c_1$}
+}
+\Else{
+    \Return{ABSTENCIÓN}
+}
+\end{algorithm}
+
+\begin{algorithm}
+\caption{CERTIFY}\label{alg:certify}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{$f$, $\sigma$, $x$, $n_0$, $n$, $\alpha$}
+\Output{predicción $c$ y radio $R(p_A,\sigma)$ o ABSTENCIÓN}
+\BlankLine
+counts0 $\leftarrow$ SAMPLEUNDERNOISE($f$, $x$, $n_0$, $\sigma$)\;
+$c \leftarrow$ mayor índice en counts0\;
+counts $\leftarrow$ SAMPLEUNDERNOISE($f$, $x$, $n$, $\sigma^2$)\;
+$p_A \leftarrow$ LOWERCONFBOUND(counts[$c_A$], $n$, $1 - \alpha$)\;
+\If{$p_A > \frac{1}{2}$}{
+    \Return{predicción $c$ y radio $R(p_A,\sigma)$}
+}
+\Else{
+    \Return{ABSTENCIÓN}
+}
+\end{algorithm}
+
+
+La efectividad del método para certificar la robustez de $g$ en torno a $x$ viene dada por el siguiente resultado.
+
+\begin{proposicion}
+Con probabilidad de al menos $1 - \alpha$ sobre la aleatoriedad de \textit{CERTIFY} (Alg~\ref{alg:certify}), este método devuelve la etiqueta asociada, $c$ y un radio $R$. Entonces, $g$ predice $c$ dentro del radio $R$ en torno a $x$, esto es:
+
+$$g(x + \delta) = c \text{ } \forall \| \delta \| < R$$
+\end{proposicion}

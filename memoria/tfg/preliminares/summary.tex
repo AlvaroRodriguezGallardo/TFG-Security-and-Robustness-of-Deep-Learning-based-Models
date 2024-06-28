@@ -1,0 +1,31 @@
+% !TeX root = ../tfg.tex
+% !TeX encoding = utf8
+%
+%*******************************************************
+% Summary
+%*******************************************************
+
+\selectlanguage{english}
+\chapter{Summary}
+
+%An english summary of the project (around 800 and 1500 words are recommended).
+
+%File: \texttt{preliminares/summary.tex}
+
+This project aims to conduct a study of a specific area within deep learning: adversarial learning. Broadly speaking, following a brief introduction (chapter \ref{cap:capitulo1}) to the core algorithms in deep learning, neural networks, and a short introduction to the classical taxonomies of adversarial learning problems focused on neural networks, the dissertation is divided into three distinct parts: various theoretical analyses of existing vulnerabilities, presentation of some problems according to a particular taxonomy, and experimentation with some of them, leading to the proposal of an algorithm utilizing the knowledge acquired in university studies.
+
+Historically, cybersecurity has been a field developed around computer systems such as operating systems. However, in recent years, given the rise of artificial intelligence and, in particular, deep learning algorithms, a heated debate has emerged regarding the reliability of these models, considering that studies on their interpretability are not very advanced and incidents such as the inability of a model trained by the U.S. military to recognize tanks have occurred. Experts began to question what might cause these models to fail, identifying potential vulnerabilities, and started developing attack, defense, and detection algorithms, which began to feed off each other. An attack will be successful if a detection algorithm fails to discover it, and a detection algorithm will be effective if it captures more attacks. A defense algorithm will be more robust if it increases the model's resilience against existing attacks and potential new ones, although improvements will be necessary due to the continuous emergence of more sophisticated attacks.
+
+Firstly, an extensive exposition of some expert proposals as potential vulnerabilities will be presented. The use of certain functions or even the network's architecture itself are some of them. This will be illustrated with theoretical developments by various authors to support their theses, utilizing aspects of Probability or Geometry. The relevance of this is that, given that it is unknown why the network may make certain decisions, effective defense, attack, and detection algorithms can be generated considering certain hypotheses, which are the existing vulnerabilities. This corresponds to chapter \ref{cap:capitulo2}.
+
+Subsequently, some of the proposed algorithms for both attacking and defending, or minimizing damage, will be presented according to the causative-reactive taxonomy, as explained in the introduction. A separation will also be made where appropriate between generative and predictive networks, and given their growing popularity, some of the proposed attack algorithms for LLMs, that is, Large Language Models, on which popular applications like ChatGPT are based, will be reviewed. This corresponds to chapter \ref{cap:capitulo3}.
+
+Finally, after selecting attack algorithms against convolutional neural networks that may be of interest, a simulated attack scenario on physical systems will be conducted. Specifically, against a signal recognition system for autonomous vehicle driving. The objective of these experiments is to demonstrate the importance of this field of study and evaluate the effectiveness of certain attacks compared to others. The experimentation will conclude with a heuristic-based attack proposed by the student, leading to the conclusion that certain attacks will be effective for specific objectives and ineffective for others. The relevant information is in chapter \ref{cap:capitulo4}.
+
+Chapter \ref{cap:capitulo5} contains the conclusions drawn after studying the subject and drafting the dissertation, along with some future work directions, including, among other aspects, the importance of advancing in the field of interpretability and the need to study techniques that allow for building more robust models.
+
+
+
+% Al finalizar el resumen en inglés, volvemos a seleccionar el idioma español para el documento
+\selectlanguage{spanish} 
+\endinput
